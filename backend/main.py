@@ -242,8 +242,8 @@ def _metric_current(val):
 def sync_ratings_official():
     """Тянем официальные оценки через Analytics item-rating v2.
 
-    Берём длинный период (~3 года), чтобы fiveStar/feedbackCount были
-    накопленными, а не приростом за неделю (короткий период ломал склейки).
+    Берём максимальный период WB (до 1 года), чтобы fiveStar/feedbackCount
+    были ближе к накопленным, а не приросту за неделю.
     Ручные записи (source=manual) не трогаем.
     """
     if not WB_TOKEN:
@@ -251,7 +251,7 @@ def sync_ratings_official():
         return {"status": "error", "error": "WB_TOKEN empty"}
 
     end = date.today()
-    start = end - timedelta(days=365 * 3)
+    start = end - timedelta(days=364)  # WB: не раньше чем год назад
     limit = 1000
     offset = 0
     items = []
