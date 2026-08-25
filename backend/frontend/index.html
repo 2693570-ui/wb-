@@ -474,6 +474,45 @@ td.tc{text-align:center}
 .spp-chart-legend{display:flex;gap:16px;font-size:12px;color:var(--wb-muted);margin-bottom:4px}
 .spp-chart-legend i{display:inline-block;width:18px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
 .spp-chart-empty{padding:48px 16px;text-align:center;color:var(--wb-muted);font-size:13px}
+
+.vis-winner{background:var(--wb-surface);border:1px solid var(--wb-purple);border-radius:var(--r);padding:16px 18px;margin-bottom:18px}
+.vis-winner h3{font-size:15px;font-weight:600;margin:0 0 8px}
+.vis-winner ul{margin:0;padding-left:18px;color:var(--wb-muted);font-size:13px;line-height:1.5}
+.vis-winner li{margin:3px 0}
+.vis-holes{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.vis-hole{background:var(--wb-surface);border:1px solid var(--wb-border);border-radius:var(--r);padding:12px 14px;font-size:13px;line-height:1.45}
+.vis-concepts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+.vis-concept{background:var(--wb-surface);border:1px solid var(--wb-border);border-radius:var(--r);padding:14px;cursor:pointer;text-align:left;font-family:inherit;color:inherit}
+.vis-concept:hover{border-color:var(--wb-purple)}
+.vis-concept.on{border-color:var(--wb-purple);background:var(--wb-purple-light)}
+.vis-concept h4{font-size:13px;font-weight:600;margin-bottom:6px}
+.vis-concept p{font-size:12px;color:var(--wb-muted);line-height:1.4;margin:0 0 8px}
+.vis-swatch{display:inline-block;width:14px;height:14px;border-radius:4px;border:1px solid var(--wb-border);vertical-align:middle;margin-right:4px}
+.vis-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.vis-card{background:var(--wb-surface);border:1px solid var(--wb-border);border-radius:var(--r);overflow:hidden;position:relative}
+.vis-card.top{border-color:var(--wb-purple)}
+.vis-card img{width:100%;aspect-ratio:3/4;object-fit:cover;display:block;background:#F0EDE8}
+.vis-card-meta{padding:8px 8px 10px}
+.vis-card-meta .pos{font-size:10px;color:var(--wb-faint);font-weight:600}
+.vis-card-meta .nm{font-size:11px;color:var(--wb-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vis-score{position:absolute;top:6px;right:6px;background:rgba(26,24,22,.82);color:#fff;font-size:10px;font-weight:600;padding:3px 6px;border-radius:4px}
+.vis-score.hi{background:#12B76A}
+.vis-score.mid{background:#F79009}
+.vis-studio{display:grid;grid-template-columns:360px 1fr;gap:24px;align-items:start;margin-top:8px}
+.vis-canvas-wrap{background:#1A1816;border-radius:var(--r);padding:16px;display:flex;justify-content:center}
+#visCanvas{width:270px;height:360px;background:#fff;display:block}
+.vis-form{display:flex;flex-direction:column;gap:10px}
+.vis-form label{font-size:11px;font-weight:600;color:var(--wb-muted);text-transform:uppercase;letter-spacing:.3px}
+.vis-form input[type=text],.vis-form input[type=color],.vis-form textarea{
+  border:1px solid var(--wb-border);border-radius:var(--rs);padding:7px 10px;font-size:13px;font-family:inherit;width:100%;background:#fff
+}
+.vis-form textarea{min-height:64px;resize:vertical}
+.vis-note{font-size:12px;color:var(--wb-muted);line-height:1.45;margin:0 0 14px}
+@media(max-width:1100px){
+  .vis-stats,.vis-concepts{grid-template-columns:1fr 1fr}
+  .vis-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .vis-studio{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
@@ -489,6 +528,7 @@ td.tc{text-align:center}
     <div class="tb-nav-item" onclick="showSection('supplies',this)">Остатки и поставки</div>
     <div class="tb-nav-item" onclick="showSection('analytics',this)">Конкуренты</div>
     <div class="tb-nav-item" onclick="showSection('positions',this)">Позиции</div>
+    <div class="tb-nav-item" onclick="showSection('visual',this)">Визуал</div>
     <div class="tb-nav-item" onclick="showSection('ads',this)">Продвижение</div>
     <div class="tb-nav-item" onclick="showSection('finance',this)">Финансы</div>
   </div>
@@ -580,6 +620,11 @@ td.tc{text-align:center}
     <button class="upload-btn-inner" onclick="openUploadModal()">Загрузить файл оценок</button>
     <span class="upload-last" id="uploadLast"></span>
   </div>
+  <div class="upload-banner" id="ratingsHint" style="display:none;background:#F5F3FF;border-color:#DDD6FE">
+    <span>Официальные оценки WB не обновляются кнопкой «Обновить» сверху — нужен свежий файл из кабинета.</span>
+    <button class="upload-btn-inner" onclick="openUploadModal()">Загрузить новый файл</button>
+    <span class="upload-last" id="uploadLastHint"></span>
+  </div>
   <div class="cards" id="cards"></div>
   <div class="toolbar" id="toolbar" style="display:none">
     <div class="search">
@@ -593,6 +638,7 @@ td.tc{text-align:center}
     <button class="filter-btn" id="s_total" onclick="SS('total')">Отзывов</button>
     <button class="filter-btn" id="s_article" onclick="SS('article')">А–Я</button>
     <div class="ml-auto" style="display:flex;gap:8px">
+      <button class="action-btn" onclick="openUploadModal()">📊 Обновить оценки (xlsx)</button>
       <button class="action-btn" onclick="EA(1)">▾ Раскрыть</button>
       <button class="action-btn" onclick="EA(0)">▸ Свернуть</button>
       <button class="action-btn" onclick="EX()">⬇ CSV</button>
@@ -985,6 +1031,85 @@ td.tc{text-align:center}
   </div>
 </div>
 
+<!-- ВИЗУАЛ ГЛАВНОГО СЛАЙДА -->
+<div class="page" id="page-visual">
+  <div class="toolbar">
+    <span style="font-size:13px;font-weight:600">Главный слайд против топ-50</span>
+    <span style="font-size:12px;color:var(--wb-muted);margin-left:10px">места 1–50 · один слайд, который должен кликаться лучше сетки</span>
+    <div class="ml-auto" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="action-btn primary" id="visRunBtn" onclick="runVisualSerp()">Сделать главный слайд</button>
+    </div>
+  </div>
+
+  <div style="padding:12px 20px 10px;border-bottom:1px solid var(--wb-border);background:var(--wb-surface)">
+    <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--wb-muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Поисковый запрос</div>
+        <input id="visQuery" list="visQueryList" placeholder="смарт часы мужские" value="смарт часы мужские"
+          style="border:1px solid var(--wb-border);border-radius:var(--rs);padding:6px 10px;font-size:12px;font-family:inherit;width:280px"
+          onkeydown="if(event.key==='Enter') runVisualSerp()">
+        <datalist id="visQueryList"></datalist>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--wb-muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Город</div>
+        <select id="visCity"
+          style="border:1px solid var(--wb-border);border-radius:var(--rs);padding:6px 10px;font-size:12px;font-family:inherit;min-width:180px;background:#fff">
+          <option value="-1257786">Москва</option>
+        </select>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--wb-muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Твои часы · артикул WB</div>
+        <div style="display:flex;gap:8px">
+          <input id="visOwnNm" placeholder="nmID, напр. 960039726" inputmode="numeric"
+            style="border:1px solid var(--wb-border);border-radius:var(--rs);padding:6px 10px;font-size:12px;font-family:inherit;width:200px"
+            onkeydown="if(event.key==='Enter') visUseNmPhoto()">
+          <button class="action-btn" onclick="visUseNmPhoto()">Подставить фото</button>
+        </div>
+      </div>
+    </div>
+    <div id="visStatus" style="margin-top:10px;font-size:12px;color:var(--wb-muted)">Ключ → разбор мест 1–50 → один слайд 900×1200, который должен выигрывать клик</div>
+  </div>
+
+  <div style="padding:20px 24px 40px">
+    <p class="vis-note" id="visNote">Система смотрит главные слайды топ-50 и CTR из «Сравнение карточек», затем собирает один кадр, который контрастирует с сеткой. Подставь фото своих часов — скачаешь готовый PNG.</p>
+    <div id="visWinner"></div>
+    <div id="visStudioBlock" style="margin-bottom:28px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px">Побеждающий слайд · 900×1200</div>
+      <div style="font-size:12px;color:var(--wb-muted);margin-bottom:14px">После разбора шаблон и цвета ставятся сами. Можно поправить текст и скачать.</div>
+      <div class="vis-studio">
+        <div class="vis-canvas-wrap"><canvas id="visCanvas" width="900" height="1200"></canvas></div>
+        <div class="vis-form">
+          <label>Фото товара (или артикул сверху)</label>
+          <input type="file" id="visPhoto" accept="image/*" onchange="visOnPhoto(this.files[0])">
+          <label>Заголовок</label>
+          <input type="text" id="visHeadline" maxlength="42" oninput="visDrawStudio()" placeholder="AMOLED · 7 дней">
+          <label>Подзаголовок</label>
+          <input type="text" id="visSub" maxlength="64" oninput="visDrawStudio()" placeholder="Мужские смарт-часы">
+          <div style="display:flex;gap:12px">
+            <div style="flex:1"><label>Фон</label><input type="color" id="visBg" value="#12141A" oninput="visDrawStudio()"></div>
+            <div style="flex:1"><label>Текст</label><input type="color" id="visFg" value="#F7F4F0" oninput="visDrawStudio()"></div>
+            <div style="flex:1"><label>Акцент</label><input type="color" id="visAccent" value="#D4622A" oninput="visDrawStudio()"></div>
+          </div>
+          <label>Шаблон</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button type="button" class="filter-btn on" id="visTplStudio" onclick="visSetTpl('studio')">Студия</button>
+            <button type="button" class="filter-btn" id="visTplWrist" onclick="visSetTpl('wrist')">На запястье</button>
+            <button type="button" class="filter-btn" id="visTplSplit" onclick="visSetTpl('split')">Фото + оффер</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+            <button class="action-btn primary" onclick="visDownloadPng()">Скачать PNG 900×1200</button>
+            <button class="action-btn" onclick="visCopyBrief()">Копировать бриф</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="visStats"></div>
+    <div id="visHoles"></div>
+    <div id="visConcepts"></div>
+    <div id="visGrid"></div>
+  </div>
+</div>
+
 <!-- ФИНАНСЫ -->
 <div class="page" id="page-finance">
   <div id="finGate" class="fin-lock">
@@ -1119,6 +1244,7 @@ function showSection(sec, btn) {
   else if(sec === 'ads') showPage('ads', null);
   else if(sec === 'analytics') showPage('competitors', null);
   else if(sec === 'positions') showPage('positions', document.querySelector('#subnav-positions .sn-item'));
+  else if(sec === 'visual') showPage('visual', null);
   else if(sec === 'finance') showPage('finance', null);
 }
 
@@ -1144,6 +1270,7 @@ function showPage(id, btn) {
   if(id === 'positions') renderPositionsPage();
   if(id === 'shelves') renderShelvesPage();
   if(id === 'my-shelves') renderMyShelvesPage();
+  if(id === 'visual') renderVisualPage();
   if(id === 'finance') renderFinance();
 }
 
@@ -1225,6 +1352,13 @@ async function loadData() {
     }
 
     document.getElementById('uploadBanner').classList.toggle('hidden', HAS_OFFICIAL);
+    const hint = document.getElementById('ratingsHint');
+    if(hint) {
+      hint.style.display = HAS_OFFICIAL ? 'flex' : 'none';
+      const hLast = document.getElementById('uploadLastHint');
+      const lastUp = (data.settings || {}).last_ratings_upload;
+      if(hLast && lastUp) hLast.textContent = 'Последняя загрузка: ' + lastUp;
+    }
 
     // Negative review counts by period (server-aggregated, for stars 1-3; we slice client-side by chosen star set)
     NEG_COUNTS = data.negative_counts || {};
@@ -6912,6 +7046,404 @@ async function saveCfoSnapshot() {
 }
 
 loadData();
+
+let VIS_DATA = null;
+let VIS_TPL = 'studio';
+let VIS_PHOTO = null;
+let VIS_READY = false;
+
+async function renderVisualPage() {
+  visDrawStudio();
+  if(VIS_READY) return;
+  try {
+    const r = await fetch(`${RAILWAY_URL}/api/search-keywords`);
+    const d = await r.json();
+    const keys = Array.isArray(d.keywords) ? d.keywords : [];
+    const dl = document.getElementById('visQueryList');
+    if(dl) dl.innerHTML = keys.map(k => `<option value="${escapeHtml(k.query || '')}">`).join('');
+    const cities = Array.isArray(d.cities) ? d.cities : [];
+    const sel = document.getElementById('visCity');
+    if(sel && cities.length) {
+      const saved = localStorage.getItem('pos_dest') || String(d.default_dest || -1257786);
+      sel.innerHTML = cities.map(c =>
+        `<option value="${c.dest}"${String(c.dest)===String(saved)?' selected':''}>${escapeHtml(c.name)}</option>`
+      ).join('');
+    }
+    VIS_READY = true;
+  } catch(e) {}
+}
+
+function visSetStatus(t, ok) {
+  const el = document.getElementById('visStatus');
+  if(!el) return;
+  el.textContent = t;
+  el.style.color = ok === false ? 'var(--red)' : (ok ? 'var(--green)' : 'var(--wb-muted)');
+}
+
+function visFmtPrice(n) {
+  if(n == null || !isFinite(n)) return '—';
+  return new Intl.NumberFormat('ru-RU').format(Math.round(n)) + ' ₽';
+}
+
+function visShotRu(s) {
+  return ({studio:'студия', busy:'плотный кадр', mixed:'смешанный'})[s] || s || '—';
+}
+
+async function runVisualSerp() {
+  const query = (document.getElementById('visQuery') || {}).value || '';
+  const dest = Number((document.getElementById('visCity') || {}).value || -1257786);
+  const btn = document.getElementById('visRunBtn');
+  if(!query.trim()) { visSetStatus('Введи поисковый запрос', false); return; }
+  if(btn) btn.disabled = true;
+  visSetStatus('Снимаю места 1–50 и собираю слайд, который должен кликаться лучше сетки… 15–25 сек');
+  try {
+    const r = await fetch(`${RAILWAY_URL}/api/visual/serp`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({query: query.trim(), dest, limit: 50, force: true}),
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || d.error || r.status);
+    VIS_DATA = d;
+    drawVisualResult();
+    const n = (d.items || []).length;
+    visSetStatus('Готово: ' + n + ' мест · слайд против этой выдачи собран', true);
+    const own = (document.getElementById('visOwnNm') || {}).value;
+    if(own && parseInt(own, 10)) visUseNmPhoto();
+  } catch(e) {
+    visSetStatus('Ошибка: ' + (e.message || e), false);
+  } finally {
+    if(btn) btn.disabled = false;
+  }
+}
+
+function visFmtPct(n) {
+  if(n == null || n === '' || !isFinite(Number(n))) return '—';
+  return (Math.round(Number(n) * 10) / 10) + '%';
+}
+
+function drawVisualResult() {
+  const d = VIS_DATA;
+  if(!d) return;
+  const brief = d.brief || {};
+  const funnel = d.funnel || {};
+  const items = d.items || [];
+  const matched = funnel.matched || brief.funnel_matched || 0;
+  const winner = brief.winner || (brief.concepts || [])[0] || null;
+
+  const winEl = document.getElementById('visWinner');
+  if(winEl) {
+    if(winner) {
+      const beats = (winner.why_beats || []).map(x => `<li>${escapeHtml(x)}</li>`).join('');
+      winEl.innerHTML = `<div class="vis-winner">
+        <h3>Слайд против мест 1–${winner.vs_places || items.length}: ${escapeHtml(winner.title || '')}</h3>
+        <div style="font-size:13px;margin-bottom:8px"><b>${escapeHtml(winner.headline || '')}</b> · ${escapeHtml(winner.sub || '')}</div>
+        <div style="font-size:12px;color:var(--wb-muted);margin-bottom:8px">${escapeHtml(winner.composition || '')}</div>
+        <ul>${beats}</ul>
+      </div>`;
+    } else winEl.innerHTML = '';
+  }
+
+  const stats = document.getElementById('visStats');
+  if(stats) stats.innerHTML = `<div class="vis-stats">
+    <div class="card"><div class="card-l">Совпало с отчётом</div><div class="card-v">${matched} / ${items.length || 0}</div>
+      <div class="card-sub">${escapeHtml(funnel.period || 'Сравнение карточек')}</div></div>
+    <div class="card"><div class="card-l">Медиана CTR</div><div class="card-v">${visFmtPct(brief.median_ctr)}</div>
+      <div class="card-sub">показы → карточка</div></div>
+    <div class="card"><div class="card-l">Медиана CR</div><div class="card-v">${visFmtPct(brief.median_cr)}</div>
+      <div class="card-sub">карточка → корзина</div></div>
+    <div class="card"><div class="card-l">Контрастный фон</div><div class="card-v" style="display:flex;align-items:center;gap:8px">
+      <span class="vis-swatch" style="width:22px;height:22px;background:${escapeHtml(brief.contrast_hex||'#ccc')}"></span>
+      <span style="font-size:16px">${escapeHtml(brief.contrast_hex || '')}</span></div>
+      <div class="card-sub">${escapeHtml(brief.dominant_bg_ru || '')} ${brief.dominant_bg_share || 0}% выдачи</div></div>
+  </div>`;
+
+  const holes = document.getElementById('visHoles');
+  if(holes) {
+    const list = (brief.holes || []).map(h => `<div class="vis-hole">${escapeHtml(h)}</div>`).join('');
+    const avoid = (brief.avoid || []).length
+      ? `<div class="vis-hole"><b>Не делать:</b> ${(brief.avoid || []).map(escapeHtml).join(' · ')}</div>` : '';
+    holes.innerHTML = `<div class="vis-holes">${list}${avoid}</div>`;
+  }
+
+  const concepts = document.getElementById('visConcepts');
+  if(concepts) {
+    concepts.innerHTML = `<div class="vis-concepts">${(brief.concepts || []).map(c => `
+      <button type="button" class="vis-concept${VIS_TPL===c.id?' on':''}" onclick="visApplyConcept('${c.id}')">
+        <h4><span class="vis-swatch" style="background:${escapeHtml(c.bg)}"></span>${escapeHtml(c.title)}</h4>
+        <p>${escapeHtml(c.why || '')}</p>
+        <div style="font-size:12px;font-weight:600">${escapeHtml(c.headline || '')}</div>
+        <div style="font-size:11px;color:var(--wb-muted);margin-top:4px">${escapeHtml(c.composition || '')}</div>
+      </button>`).join('')}</div>`;
+  }
+
+  const grid = document.getElementById('visGrid');
+  if(grid) {
+    const ranked = items.slice().sort((a,b) => (Number(b.ctr)||-1) - (Number(a.ctr)||-1));
+    const topNm = ranked[0] && ranked[0].ctr != null ? ranked[0].nm_id : null;
+    const cap = matched
+      ? `Сетка выдачи · бейдж = CTR из «Сравнение карточек» · рамка у лидера CTR`
+      : `Сетка выдачи · скор визуальный, в отчётах нет этих артикулов`;
+    grid.innerHTML = items.length
+      ? `<div style="font-size:13px;font-weight:600;margin:4px 0 10px">${cap}</div>
+         <div class="vis-grid">${items.map(it => {
+           const hasCtr = it.ctr != null && isFinite(Number(it.ctr));
+           const sc = hasCtr ? visFmtPct(it.ctr) : (it.click_score || 0);
+           const cls = hasCtr
+             ? (Number(it.ctr) >= (brief.median_ctr || 0) ? 'hi' : 'mid')
+             : ((it.click_score||0) >= 70 ? 'hi' : ((it.click_score||0) >= 50 ? 'mid' : ''));
+           const thumb = it.thumb || wbThumbUrl(it.nm_id);
+           const crLine = (it.cart_conv != null || it.order_conv != null)
+             ? `CR корз. ${visFmtPct(it.cart_conv)} · заказ ${visFmtPct(it.order_conv)}`
+             : `${visFmtPrice(it.price)} · ★ ${it.rating != null ? it.rating : '—'}`;
+           return `<a class="vis-card${it.nm_id===topNm?' top':''}" href="${escapeHtml(it.url||'#')}" target="_blank" rel="noopener">
+             <span class="vis-score ${cls}">${sc}</span>
+             <img src="${escapeHtml(thumb)}" alt="" loading="lazy"
+               onerror="if(!this.dataset.fb){this.dataset.fb=1;this.src='${wbThumbUrl(it.nm_id,'jpg')}'}">
+             <div class="vis-card-meta">
+               <div class="pos">#${it.position} · ${escapeHtml(visShotRu(it.shot))} · ${escapeHtml(it.bg_family||'')}</div>
+               <div class="nm">${escapeHtml(it.brand || it.name || String(it.nm_id))}</div>
+               <div class="pos">${crLine}</div>
+             </div>
+           </a>`;
+         }).join('')}</div>`
+      : `<div class="empty" style="padding:32px 16px">Нет карточек по этому ключу</div>`;
+  }
+
+  if(winner) visApplyConcept(winner.id, true);
+  else visDrawStudio();
+}
+
+function visApplyConcept(id, silent) {
+  const c = ((VIS_DATA && VIS_DATA.brief && VIS_DATA.brief.concepts) || []).find(x => x.id === id);
+  VIS_TPL = (id === 'wrist' || id === 'split') ? id : 'studio';
+  visSyncTplBtns();
+  if(c) {
+    const h = document.getElementById('visHeadline');
+    const s = document.getElementById('visSub');
+    const bg = document.getElementById('visBg');
+    const fg = document.getElementById('visFg');
+    const ac = document.getElementById('visAccent');
+    if(h) h.value = c.headline || '';
+    if(s) s.value = c.sub || '';
+    if(bg) bg.value = visNormHex(c.bg);
+    if(fg) fg.value = visNormHex(c.text);
+    if(ac) ac.value = visNormHex(c.accent || '#D4622A');
+  }
+  document.querySelectorAll('.vis-concept').forEach(el => {
+    el.classList.toggle('on', (el.getAttribute('onclick')||'').includes("'" + id + "'"));
+  });
+  visDrawStudio();
+  if(!silent) visSetStatus('Шаблон «' + (c && c.title ? c.title : id) + '» в студии', true);
+}
+
+function visNormHex(h) {
+  h = String(h || '#12141A').trim();
+  if(/^#[0-9a-fA-F]{6}$/.test(h)) return h;
+  return '#12141A';
+}
+
+function visSetTpl(id) {
+  VIS_TPL = id;
+  visSyncTplBtns();
+  visDrawStudio();
+}
+
+function visSyncTplBtns() {
+  [['visTplStudio','studio'],['visTplWrist','wrist'],['visTplSplit','split']].forEach(([id, t]) => {
+    const el = document.getElementById(id);
+    if(el) el.classList.toggle('on', VIS_TPL === t);
+  });
+}
+
+function visOnPhoto(file) {
+  if(!file) return;
+  const img = new Image();
+  img.onload = () => { VIS_PHOTO = img; visDrawStudio(); };
+  img.src = URL.createObjectURL(file);
+}
+
+function visUseNmPhoto() {
+  const nm = parseInt((document.getElementById('visOwnNm') || {}).value, 10);
+  if(!nm) { visSetStatus('Введи артикул WB своих часов', false); return; }
+  const img = new Image();
+  img.onload = () => { VIS_PHOTO = img; visDrawStudio(); visSetStatus('Фото карточки ' + nm + ' подставлено в слайд', true); };
+  img.onerror = () => visSetStatus('Не удалось загрузить фото ' + nm, false);
+  img.src = `${RAILWAY_URL}/api/visual/image/${nm}`;
+}
+
+function visRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+}
+
+function visCover(ctx, img, x, y, w, h) {
+  const ir = img.width / img.height;
+  const r = w / h;
+  let dw = w, dh = h, dx = x, dy = y;
+  if(ir > r) { dw = h * ir; dx = x - (dw - w) / 2; }
+  else { dh = w / ir; dy = y - (dh - h) / 2; }
+  ctx.drawImage(img, dx, dy, dw, dh);
+}
+
+function visContain(ctx, img, x, y, w, h, pad) {
+  pad = pad || 0;
+  const boxW = w - pad * 2, boxH = h - pad * 2;
+  const ir = img.width / img.height;
+  let dw, dh;
+  if(ir > boxW / boxH) { dw = boxW; dh = boxW / ir; }
+  else { dh = boxH; dw = boxH * ir; }
+  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+}
+
+function visDrawStudio() {
+  const canvas = document.getElementById('visCanvas');
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = 900, H = 1200;
+  canvas.width = W; canvas.height = H;
+  const bg = (document.getElementById('visBg') || {}).value || '#12141A';
+  const fg = (document.getElementById('visFg') || {}).value || '#F7F4F0';
+  const ac = (document.getElementById('visAccent') || {}).value || '#D4622A';
+  const headline = ((document.getElementById('visHeadline') || {}).value || '').trim();
+  const sub = ((document.getElementById('visSub') || {}).value || '').trim();
+
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  const drawPlaceholder = (x, y, w, h) => {
+    ctx.save();
+    ctx.strokeStyle = ac;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(x + w/2, y + h*0.42, Math.min(w,h)*0.18, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(x + w/2, y + h*0.62, Math.min(w,h)*0.16, 8, 0, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.fillStyle = fg;
+    ctx.globalAlpha = 0.55;
+    ctx.font = '500 28px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Загрузи фото часов', x + w/2, y + h*0.78);
+    ctx.restore();
+  };
+
+  if(VIS_TPL === 'split') {
+    const splitY = Math.round(H * 0.62);
+    if(VIS_PHOTO) visCover(ctx, VIS_PHOTO, 0, 0, W, splitY);
+    else {
+      ctx.fillStyle = '#2A2622';
+      ctx.fillRect(0, 0, W, splitY);
+      drawPlaceholder(0, 0, W, splitY);
+    }
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, splitY, W, H - splitY);
+    ctx.fillStyle = ac;
+    ctx.fillRect(0, splitY, 10, H - splitY);
+    ctx.fillStyle = fg;
+    ctx.textAlign = 'left';
+    ctx.font = '700 52px Inter, sans-serif';
+    visWrapText(ctx, headline || 'УТП', 48, splitY + 90, W - 96, 60);
+    ctx.font = '500 32px Inter, sans-serif';
+    ctx.globalAlpha = 0.8;
+    visWrapText(ctx, sub, 48, splitY + 200, W - 96, 40);
+    ctx.globalAlpha = 1;
+  } else if(VIS_TPL === 'wrist') {
+    if(VIS_PHOTO) visCover(ctx, VIS_PHOTO, 0, 0, W, H);
+    else drawPlaceholder(0, 0, W, H);
+    const g = ctx.createLinearGradient(0, H*0.55, 0, H);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,0,0,0.72)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'left';
+    ctx.font = '700 54px Inter, sans-serif';
+    visWrapText(ctx, headline || 'На руке', 48, H - 180, W - 96, 62);
+    ctx.font = '500 28px Inter, sans-serif';
+    ctx.globalAlpha = 0.9;
+    visWrapText(ctx, sub, 48, H - 90, W - 96, 36);
+    ctx.globalAlpha = 1;
+  } else {
+    if(VIS_PHOTO) visContain(ctx, VIS_PHOTO, 0, 40, W, H - 280, 70);
+    else drawPlaceholder(0, 40, W, H - 280);
+    ctx.fillStyle = ac;
+    visRoundRect(ctx, 0, 0, 12, H, 0);
+    ctx.fill();
+    ctx.fillStyle = fg;
+    ctx.textAlign = 'center';
+    ctx.font = '700 48px Inter, sans-serif';
+    visWrapText(ctx, headline || 'УТП', W/2, H - 150, W - 80, 56);
+    ctx.font = '500 28px Inter, sans-serif';
+    ctx.globalAlpha = 0.75;
+    visWrapText(ctx, sub, W/2, H - 72, W - 80, 36);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function visWrapText(ctx, text, x, y, maxW, lineH) {
+  if(!text) return;
+  const words = String(text).split(/\s+/);
+  let line = '', yy = y;
+  for(let i=0;i<words.length;i++) {
+    const test = line ? line + ' ' + words[i] : words[i];
+    if(ctx.measureText(test).width > maxW && line) {
+      ctx.fillText(line, x, yy);
+      line = words[i];
+      yy += lineH;
+    } else line = test;
+  }
+  if(line) ctx.fillText(line, x, yy);
+}
+
+function visDownloadPng() {
+  visDrawStudio();
+  const canvas = document.getElementById('visCanvas');
+  if(!canvas) return;
+  const a = document.createElement('a');
+  const q = ((document.getElementById('visQuery') || {}).value || 'slide').replace(/[^\wа-яё-]+/gi, '-').slice(0,40);
+  a.download = 'wb-' + (q || 'slide') + '-900x1200.png';
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
+function visCopyBrief() {
+  const d = VIS_DATA;
+  const b = (d && d.brief) || {};
+  const matched = (d && d.funnel && d.funnel.matched) || b.funnel_matched || 0;
+  const c = (b.concepts || []).find(x => x.id === VIS_TPL) || (b.concepts || [])[0] || {};
+  const lines = [
+    'Бриф главного слайда WB 900×1200',
+    'Запрос: ' + ((d && d.query) || (document.getElementById('visQuery')||{}).value || ''),
+    'Город: ' + ((d && d.city) || ''),
+    '',
+    'Что в выдаче:',
+    ...(b.holes || []).map(h => '— ' + h),
+    '',
+    'Не делать: ' + (b.avoid || []).join('; '),
+    '',
+    'Воронка из «Сравнение карточек»: совпало ' + (matched || 0) + ', медиана CTR ' + visFmtPct(b.median_ctr) + ', CR ' + visFmtPct(b.median_cr),
+    '',
+    'Побеждающий слайд: ' + ((b.winner && b.winner.title) || VIS_TPL),
+    ...((b.winner && b.winner.why_beats) || []).map(x => '— ' + x),
+    '',
+    'Концепт: ' + (c.title || VIS_TPL),
+    'Фон: ' + ((document.getElementById('visBg')||{}).value || c.bg || ''),
+    'Текст: ' + ((document.getElementById('visHeadline')||{}).value || ''),
+    'Подзаголовок: ' + ((document.getElementById('visSub')||{}).value || ''),
+    'Композиция: ' + (c.composition || ''),
+    '',
+    b.note || '',
+  ];
+  navigator.clipboard.writeText(lines.join('\n')).then(() => visSetStatus('Бриф скопирован', true))
+    .catch(() => visSetStatus('Не удалось скопировать', false));
+}
 </script>
 </body>
 </html>

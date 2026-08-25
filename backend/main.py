@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone, date
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 import pandas as pd
 from pathlib import Path
@@ -20,6 +20,12 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+try:
+    from studio_auth import router as studio_router
+    app.include_router(studio_router)
+except Exception as _studio_imp_err:
+    logger.warning(f"studio router not loaded: {_studio_imp_err}")
 
 WB_TOKEN = os.getenv("WB_TOKEN", "")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
@@ -233,11 +239,7 @@ def sync_ratings_official():
             f"{SUPABASE_URL}/rest/v1/settings?key=eq.last_ratings_sync_error",
             headers={**sb_headers(), "Prefer": "return=minimal"}, timeout=10,
         )
-        try:
-            _DASH_CACHE["ts"] = 0.0
-            _DASH_CACHE["data"] = None
-        except NameError:
-            pass
+        invalidate_dash_cache()
     except Exception as e:
         logger.warning(f"sync_ratings_official cleanup: {e}")
     logger.info("sync_ratings_official: skipped (use feedbacks + optional xlsx)")
@@ -2779,10 +2781,11 @@ async def upload_ratings(file: UploadFile = File(...)):
 
         # Обновляем время загрузки
         httpx.post(
-            f"{SUPABASE_URL}/rest/v1/settings",
+            f"{SUPABASE_URL}/rest/v1/settings?on_conflict=key",
             json={"key": "last_ratings_upload", "value": datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M"), "updated_at": now},
-            headers=sb_headers(), timeout=10
+            headers={**sb_headers(), "Prefer": "resolution=merge-duplicates"}, timeout=10
         )
+        invalidate_dash_cache()
 
         return {"status": "ok", "saved": saved, "total_rows": len(rows)}
 
@@ -4662,6 +4665,29 @@ def root_index():
 if (FRONTEND_DIR / "index.html").exists():
     app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
+STUDIO_CANDIDATES = [
+    Path(__file__).resolve().parent.parent / "studio",
+    Path(__file__).resolve().parent / "studio",
+    Path.cwd() / "studio",
+]
+
+def _resolve_studio_dir():
+    for p in STUDIO_CANDIDATES:
+        if (p / "index.html").exists():
+            return p
+    return STUDIO_CANDIDATES[0]
+
+STUDIO_DIR = _resolve_studio_dir()
+
+@app.get("/studio")
+@app.get("/studio/")
+def studio_page():
+    index = STUDIO_DIR / "index.html"
+    if index.exists():
+        return FileResponse(index, media_type="text/html; charset=utf-8")
+    return HTMLResponse("<h1>studio missing</h1>", status_code=404)
+
+
 @app.get("/api/status")
 def status():
     try:
@@ -4689,6 +4715,7 @@ def trigger_sync():
 @app.post("/api/save-manual-rating")
 async def save_manual_rating(request: dict):
     """Сохраняет ручной рейтинг (разбивку по звёздам) для артикула без данных."""
+    from urllib.parse import quote
     article = request.get("article")
     nm_id = request.get("nm_id")
     r5 = int(request.get("r5") or 0)
@@ -4709,8 +4736,9 @@ async def save_manual_rating(request: dict):
     }
     try:
         # Удаляем старую запись если есть, вставляем новую
+        art_q = quote(str(article), safe="")
         httpx.delete(
-            f"{SUPABASE_URL}/rest/v1/ratings_official?article=eq.{article}",
+            f"{SUPABASE_URL}/rest/v1/ratings_official?article=eq.{art_q}",
             headers={**sb_headers(), "Prefer": "return=minimal"}, timeout=10
         )
         resp = httpx.post(
@@ -4719,6 +4747,7 @@ async def save_manual_rating(request: dict):
         )
         if not resp.is_success:
             return {"error": f"DB error: {resp.status_code} {resp.text[:200]}"}
+        invalidate_dash_cache()
         return {"status": "ok", "wb_rating": wb_rating, "total": total}
     except Exception as e:
         return {"error": str(e)}
@@ -4819,6 +4848,12 @@ async def save_setting(request: dict):
 _DASH_CACHE = {"ts": 0.0, "data": None}
 _DASH_CACHE_LOCK = threading.Lock()
 _DASH_CACHE_TTL = float(os.getenv("DASHBOARD_CACHE_TTL", "45"))
+
+
+def invalidate_dash_cache():
+    with _DASH_CACHE_LOCK:
+        _DASH_CACHE["ts"] = 0.0
+        _DASH_CACHE["data"] = None
 
 
 def _dash_get(path: str, timeout: float = 15):
@@ -6224,12 +6259,13 @@ def search_positions(request: dict):
     }
 
 
-def wb_product_thumb_url(nm_id: int) -> str:
-    """Публичный CDN превью карточки WB."""
+def wb_product_img_url(nm_id: int, size: str = "tm") -> str:
+    """Публичный CDN картинки карточки WB (tm / c246x328 / big)."""
     try:
         nm_id = int(nm_id)
     except (TypeError, ValueError):
         return ""
+    size = (size or "tm").strip("/") or "tm"
     vol = nm_id // 100000
     part = nm_id // 1000
     ranges = [
@@ -6244,7 +6280,12 @@ def wb_product_thumb_url(nm_id: int) -> str:
         if vol <= r:
             basket = i + 1
             break
-    return f"https://basket-{basket:02d}.wbbasket.ru/vol{vol}/part{part}/{nm_id}/images/tm/1.webp"
+    return f"https://basket-{basket:02d}.wbbasket.ru/vol{vol}/part{part}/{nm_id}/images/{size}/1.webp"
+
+
+def wb_product_thumb_url(nm_id: int) -> str:
+    """Публичный CDN превью карточки WB."""
+    return wb_product_img_url(nm_id, "tm")
 
 
 def fetch_wb_card_brief(nm_id: int, dest: int = -1257786):
@@ -6342,6 +6383,305 @@ def fetch_wb_see_also_shelf(nm_id: int, dest: int = -1257786, limit: int = 15):
             last_err = str(e)[:160]
             time.sleep(0.6 * (attempt + 1))
     return {"items": [], "total": 0, "error": last_err or "unknown"}
+
+
+def fetch_wb_serp_products(query: str, dest: int, limit: int = 50):
+    """Топ выдачи WB по запросу — как видит покупатель (popular)."""
+    query = (query or "").strip()
+    limit = max(8, min(int(limit or 50), 50))
+    if not query:
+        return {"products": [], "total": None, "error": "query required"}
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+        ),
+        "Accept": "*/*",
+        "Accept-Language": "ru-RU,ru;q=0.9",
+        "Origin": "https://www.wildberries.ru",
+        "Referer": "https://www.wildberries.ru/",
+    }
+    last_err = None
+    last_total = None
+    collected = []
+    max_pages = 1 if limit <= 100 else 2
+
+    try:
+        with httpx.Client(timeout=30, headers=headers, follow_redirects=True) as client:
+            for page in range(1, max_pages + 1):
+                page_ok = False
+                for attempt in range(5):
+                    base = _wb_search_next_host()
+                    _wb_search_throttle(0.85 + 0.15 * attempt)
+                    try:
+                        resp = client.get(
+                            base,
+                            params={
+                                "appType": 1,
+                                "curr": "rub",
+                                "dest": dest,
+                                "query": query,
+                                "resultset": "catalog",
+                                "sort": "popular",
+                                "spp": 30,
+                                "page": page,
+                            },
+                        )
+                    except Exception as e:
+                        last_err = str(e)[:120]
+                        time.sleep(0.8 * (attempt + 1))
+                        continue
+                    if resp.status_code == 429:
+                        last_err = "429"
+                        time.sleep(2.0 * (attempt + 1))
+                        continue
+                    if not resp.is_success:
+                        last_err = f"http {resp.status_code}"
+                        time.sleep(0.5 * (attempt + 1))
+                        continue
+                    try:
+                        data = resp.json()
+                    except Exception as e:
+                        last_err = f"json {e}"
+                        time.sleep(0.4)
+                        continue
+                    products = data.get("products") or (data.get("data") or {}).get("products") or []
+                    last_total = data.get("total")
+                    if last_total is None:
+                        last_total = (data.get("data") or {}).get("total")
+                    page_ok = True
+                    last_err = None
+                    for i, p in enumerate(products):
+                        parsed = _parse_client_product(p) if isinstance(p, dict) else {}
+                        nm = parsed.get("nm_id") or (p.get("id") if isinstance(p, dict) else None)
+                        if not nm:
+                            continue
+                        collected.append({
+                            "position": (page - 1) * 100 + i + 1,
+                            "nm_id": int(nm),
+                            "brand": (p.get("brand") if isinstance(p, dict) else "") or "",
+                            "name": parsed.get("name") or (p.get("name") if isinstance(p, dict) else "") or "",
+                            "supplier": (p.get("supplier") if isinstance(p, dict) else "") or "",
+                            "rating": (p.get("reviewRating") or p.get("rating")) if isinstance(p, dict) else None,
+                            "feedbacks": (p.get("feedbacks") if isinstance(p, dict) else 0) or 0,
+                            "price": parsed.get("client_price"),
+                            "price_basic": parsed.get("client_basic"),
+                            "thumb": wb_product_img_url(nm, "c246x328"),
+                            "fallbacks": [
+                                wb_product_img_url(nm, "tm"),
+                                wb_product_img_url(nm, "c246x328").replace(".webp", ".jpg"),
+                                wb_product_img_url(nm, "tm").replace(".webp", ".jpg"),
+                                wb_product_img_url(nm, "big"),
+                            ],
+                            "url": f"https://www.wildberries.ru/catalog/{nm}/detail.aspx",
+                        })
+                        if len(collected) >= limit:
+                            break
+                    break
+                if not page_ok or len(collected) >= limit:
+                    break
+        return {"products": collected[:limit], "total": last_total, "error": last_err}
+    except Exception as e:
+        logger.exception(f"fetch_wb_serp_products: {e}")
+        return {"products": collected, "total": last_total, "error": str(e)[:160]}
+
+
+_visual_cache = {}
+_visual_cache_lock = threading.Lock()
+
+
+def load_competitor_funnel_by_nm(nm_ids: list) -> dict:
+    """Последние CTR/CR из отчётов «Сравнение карточек» по nm_id."""
+    ids = []
+    seen = set()
+    for x in nm_ids or []:
+        try:
+            n = int(x)
+        except (TypeError, ValueError):
+            continue
+        if n in seen:
+            continue
+        seen.add(n)
+        ids.append(n)
+    if not ids or not SUPABASE_URL:
+        return {}
+    try:
+        nm_param = ",".join(str(x) for x in ids)
+        resp = httpx.get(
+            f"{SUPABASE_URL}/rest/v1/competitor_metrics"
+            f"?nm_id=in.({nm_param})"
+            f"&select=nm_id,session_id,ctr,cart_conv,order_conv,views,card_opens,orders,brand"
+            f"&order=session_id.desc",
+            headers=sb_headers(),
+            timeout=20,
+        )
+        if not resp.is_success:
+            logger.warning(f"competitor funnel metrics {resp.status_code}: {resp.text[:200]}")
+            return {}
+        rows = resp.json() or []
+        if not rows:
+            return {}
+
+        session_ids = []
+        for row in rows:
+            sid = row.get("session_id")
+            if sid is not None and sid not in session_ids:
+                session_ids.append(sid)
+        period_by_sid = {}
+        if session_ids:
+            sresp = httpx.get(
+                f"{SUPABASE_URL}/rest/v1/competitor_sessions"
+                f"?id=in.({','.join(str(x) for x in session_ids[:30])})"
+                f"&select=id,period_begin,period_end,uploaded_at",
+                headers=sb_headers(),
+                timeout=15,
+            )
+            if sresp.is_success:
+                for s in sresp.json() or []:
+                    b, e = s.get("period_begin") or "", s.get("period_end") or ""
+                    period_by_sid[s.get("id")] = f"{b} — {e}".strip(" —") if (b or e) else ""
+
+        out = {}
+        for row in rows:
+            try:
+                nm = int(row.get("nm_id"))
+            except (TypeError, ValueError):
+                continue
+            if nm in out:
+                continue
+            sid = row.get("session_id")
+            def _n(v):
+                if v is None or v == "":
+                    return None
+                try:
+                    return float(v)
+                except (TypeError, ValueError):
+                    return None
+            out[nm] = {
+                "ctr": _n(row.get("ctr")),
+                "cart_conv": _n(row.get("cart_conv")),
+                "order_conv": _n(row.get("order_conv")),
+                "views": _n(row.get("views")),
+                "card_opens": _n(row.get("card_opens")),
+                "orders": _n(row.get("orders")),
+                "brand": row.get("brand") or "",
+                "session_id": sid,
+                "period": period_by_sid.get(sid) or "",
+            }
+        return out
+    except Exception as e:
+        logger.warning(f"load_competitor_funnel_by_nm: {e}")
+        return {}
+
+
+@app.post("/api/visual/serp")
+def visual_serp(request: dict):
+    """Выдача по ключу + визуальный разбор главных слайдов + бриф на клик."""
+    if not isinstance(request, dict):
+        raise HTTPException(status_code=400, detail="invalid body")
+    query = str(request.get("query") or "").strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="query required")
+    try:
+        dest = int(request.get("dest") if request.get("dest") is not None else -1257786)
+    except (TypeError, ValueError):
+        dest = -1257786
+    try:
+        limit = int(request.get("limit") or 50)
+    except (TypeError, ValueError):
+        limit = 50
+    limit = max(8, min(limit, 50))
+    force = bool(request.get("force"))
+
+    cache_key = (query.lower(), dest, limit)
+    with _visual_cache_lock:
+        hit = _visual_cache.get(cache_key)
+        if hit and not force and (time.time() - hit.get("ts", 0) < 1800):
+            return {**hit["payload"], "cached": True}
+
+    serp = fetch_wb_serp_products(query, dest, limit=limit)
+    products = serp.get("products") or []
+    if not products:
+        city_name = next((c["name"] for c in WB_SEARCH_CITIES if c["dest"] == dest), str(dest))
+        return {
+            "query": query,
+            "dest": dest,
+            "city": city_name,
+            "total": serp.get("total"),
+            "error": serp.get("error") or "empty search",
+            "items": [],
+            "palette": {},
+            "brief": {},
+        }
+
+    try:
+        from visual import analyze_serp, apply_competitor_funnel, select_winner
+        analyzed = analyze_serp(query, products)
+        funnel = load_competitor_funnel_by_nm([p.get("nm_id") for p in products])
+        analyzed = apply_competitor_funnel(analyzed, funnel)
+        analyzed = select_winner(analyzed)
+    except Exception as e:
+        logger.exception(f"analyze_serp: {e}")
+        raise HTTPException(status_code=500, detail=f"visual analyze failed: {str(e)[:160]}")
+
+    city_name = next((c["name"] for c in WB_SEARCH_CITIES if c["dest"] == dest), str(dest))
+    payload = {
+        "query": query,
+        "dest": dest,
+        "city": city_name,
+        "total": serp.get("total"),
+        "error": serp.get("error"),
+        "cached": False,
+        **analyzed,
+    }
+    with _visual_cache_lock:
+        _visual_cache[cache_key] = {"ts": time.time(), "payload": payload}
+        if len(_visual_cache) > 40:
+            oldest = sorted(_visual_cache.items(), key=lambda kv: kv[1].get("ts", 0))[:10]
+            for k, _ in oldest:
+                _visual_cache.pop(k, None)
+    return payload
+
+
+@app.get("/api/visual/image/{nm_id}")
+def visual_product_image(nm_id: int):
+    """Прокси главного фото карточки — чтобы студия могла вставить товар без CORS."""
+    if not nm_id or nm_id < 1:
+        raise HTTPException(status_code=400, detail="nm_id required")
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+        ),
+        "Accept": "image/webp,image/jpeg,image/*;q=0.8",
+        "Referer": "https://www.wildberries.ru/",
+    }
+    urls = [
+        wb_product_img_url(nm_id, "big"),
+        wb_product_img_url(nm_id, "c246x328"),
+        wb_product_img_url(nm_id, "tm"),
+        wb_product_img_url(nm_id, "big").replace(".webp", ".jpg"),
+        wb_product_img_url(nm_id, "c246x328").replace(".webp", ".jpg"),
+    ]
+    last_err = "not found"
+    try:
+        with httpx.Client(timeout=15, headers=headers, follow_redirects=True) as client:
+            for url in urls:
+                try:
+                    resp = client.get(url)
+                except Exception as e:
+                    last_err = str(e)[:120]
+                    continue
+                if resp.is_success and len(resp.content) > 400:
+                    ctype = resp.headers.get("content-type") or "image/webp"
+                    if "html" in ctype:
+                        continue
+                    return Response(content=resp.content, media_type=ctype.split(";")[0])
+                last_err = f"http {resp.status_code}"
+    except Exception as e:
+        last_err = str(e)[:160]
+    raise HTTPException(status_code=404, detail=f"image {nm_id}: {last_err}")
 
 
 @app.get("/api/competitor-shelf")
