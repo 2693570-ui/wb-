@@ -621,8 +621,9 @@ td.tc{text-align:center}
     <span class="upload-last" id="uploadLast"></span>
   </div>
   <div class="upload-banner" id="ratingsHint" style="display:none;background:#F5F3FF;border-color:#DDD6FE">
-    <span>Официальные оценки WB не обновляются кнопкой «Обновить» сверху — нужен свежий файл из кабинета.</span>
-    <button class="upload-btn-inner" onclick="openUploadModal()">Загрузить новый файл</button>
+    <span>Оценки можно обновить из WB API или загрузить файл «Оценка товара».</span>
+    <button class="upload-btn-inner" onclick="triggerRatingsApiSync()">Обновить из API</button>
+    <button class="upload-btn-inner" onclick="openUploadModal()" style="background:#6D28D9">Файл xlsx</button>
     <span class="upload-last" id="uploadLastHint"></span>
   </div>
   <div class="cards" id="cards"></div>
@@ -638,7 +639,8 @@ td.tc{text-align:center}
     <button class="filter-btn" id="s_total" onclick="SS('total')">Отзывов</button>
     <button class="filter-btn" id="s_article" onclick="SS('article')">А–Я</button>
     <div class="ml-auto" style="display:flex;gap:8px">
-      <button class="action-btn" onclick="openUploadModal()">📊 Обновить оценки (xlsx)</button>
+      <button class="action-btn" id="ratingsApiSyncBtn" onclick="triggerRatingsApiSync()">↻ Обновить из WB API</button>
+      <button class="action-btn" onclick="openUploadModal()">📊 Файл xlsx</button>
       <button class="action-btn" onclick="EA(1)">▾ Раскрыть</button>
       <button class="action-btn" onclick="EA(0)">▸ Свернуть</button>
       <button class="action-btn" onclick="EX()">⬇ CSV</button>
@@ -1431,6 +1433,32 @@ async function triggerSync() {
     setTimeout(loadData, 3000);
   } catch(e) {
     setStatus('error', 'Ошибка синхронизации');
+  }
+}
+
+async function triggerRatingsApiSync() {
+  const btn = document.getElementById('ratingsApiSyncBtn');
+  if(btn) { btn.disabled = true; btn.textContent = '⏳ Тянем из WB...'; }
+  setStatus('loading', 'Тянем оценки из WB API...');
+  const prev = (document.getElementById('uploadLast')?.textContent || '') + (document.getElementById('syncText')?.textContent || '');
+  try {
+    const resp = await fetch(`${RAILWAY_URL}/api/sync-ratings`, { method: 'POST' });
+    if(!resp.ok) throw new Error('HTTP ' + resp.status);
+    for(let i = 0; i < 24; i++) {
+      await new Promise(r => setTimeout(r, 5000));
+      await loadData();
+      const now = (document.getElementById('uploadLast')?.textContent || '') + (document.getElementById('syncText')?.textContent || '');
+      if(now !== prev && /API|Оценки:/.test(now)) {
+        setStatus('ok', document.getElementById('syncText')?.textContent || 'Оценки обновлены');
+        break;
+      }
+      if(i === 23) setStatus('ok', 'Синк запущен — обнови страницу через минуту');
+    }
+  } catch(e) {
+    setStatus('error', 'Ошибка обновления оценок: ' + e.message);
+    alert('Не удалось обновить оценки: ' + e.message);
+  } finally {
+    if(btn) { btn.disabled = false; btn.textContent = '↻ Обновить из WB API'; }
   }
 }
 

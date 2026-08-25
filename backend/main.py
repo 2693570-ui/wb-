@@ -223,27 +223,161 @@ def sync_all(full: bool = False):
     # Рейтинги склейки считаем по всем отзывам из feedbacks (в т.ч. старше года).
     # xlsx «Оценка товара» — опционально через /api/upload-ratings.
 
-def sync_ratings_official():
-    """Не используем Analytics item-rating: там только прирост за период и нет старых карточек,
-    из-за этого склейки давали бред вроде 5.06. Чистим ошибочные source=api записи."""
+def _metric_current(val):
+    """WB item-rating метрики приходят как число или {current, dynamics}."""
+    if val is None:
+        return None
+    if isinstance(val, dict):
+        cur = val.get("current")
+        try:
+            return float(cur) if cur is not None else None
+        except (TypeError, ValueError):
+            return None
     try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
+
+
+def sync_ratings_official():
+    """Тянем официальные оценки через Analytics item-rating v2.
+
+    Берём длинный период (~3 года), чтобы fiveStar/feedbackCount были
+    накопленными, а не приростом за неделю (короткий период ломал склейки).
+    Ручные записи (source=manual) не трогаем.
+    """
+    if not WB_TOKEN:
+        logger.error("sync_ratings_official: WB_TOKEN empty")
+        return {"status": "error", "error": "WB_TOKEN empty"}
+
+    end = date.today()
+    start = end - timedelta(days=365 * 3)
+    limit = 1000
+    offset = 0
+    items = []
+    try:
+        while True:
+            body = {
+                "currentPeriod": {
+                    "start": start.isoformat(),
+                    "end": end.isoformat(),
+                },
+                "isNotIncludeNmsWithoutSales": False,
+                "orderBy": {"field": "feedbackCount", "mode": "desc"},
+                "limit": limit,
+                "offset": offset,
+            }
+            resp = httpx.post(
+                f"{WB_ANALYTICS_URL}/api/analytics/v2/item-rating",
+                headers=wb_headers(),
+                json=body,
+                timeout=60,
+            )
+            if not resp.is_success:
+                err = f"WB item-rating {resp.status_code}: {resp.text[:300]}"
+                logger.error(err)
+                httpx.post(
+                    f"{SUPABASE_URL}/rest/v1/settings?on_conflict=key",
+                    json={
+                        "key": "last_ratings_sync_error",
+                        "value": err[:500],
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                    headers={**sb_headers(), "Prefer": "resolution=merge-duplicates"},
+                    timeout=10,
+                )
+                return {"status": "error", "error": err}
+
+            data = (resp.json() or {}).get("data") or {}
+            batch = data.get("items") or []
+            items.extend(batch)
+            logger.info(f"item-rating: offset={offset} got={len(batch)} total={len(items)}")
+            if len(batch) < limit:
+                break
+            offset += limit
+            time.sleep(21)  # лимит WB: 3 req/min, интервал 20 сек
+
+        now = datetime.now(timezone.utc).isoformat()
+        rows = []
+        for it in items:
+            article = str(it.get("vendorCode") or "").strip()
+            if not article:
+                continue
+            r5 = int(_metric_current(it.get("fiveStar")) or 0)
+            r4 = int(_metric_current(it.get("fourStar")) or 0)
+            r3 = int(_metric_current(it.get("threeStar")) or 0)
+            r2 = int(_metric_current(it.get("twoStar")) or 0)
+            r1 = int(_metric_current(it.get("oneStar")) or 0)
+            star_sum = r5 + r4 + r3 + r2 + r1
+            reviews_total = int(_metric_current(it.get("feedbackCount")) or 0)
+            if not reviews_total and star_sum > 0:
+                reviews_total = star_sum
+            wb_rating = _metric_current(it.get("feedbackRating"))
+            if wb_rating is None and star_sum > 0:
+                wb_rating = round((r5 * 5 + r4 * 4 + r3 * 3 + r2 * 2 + r1) / star_sum, 2)
+            nm_raw = it.get("nmId")
+            try:
+                nm_id = int(nm_raw) if nm_raw is not None else None
+            except (TypeError, ValueError):
+                nm_id = None
+            excluded = int(_metric_current(it.get("disqualified")) or it.get("disqualified") or 0)
+            rows.append({
+                "article": article,
+                "nm_id": nm_id,
+                "name": str(it.get("title") or "").strip() or None,
+                "wb_rating": wb_rating,
+                "reviews_total": reviews_total,
+                "r5": r5, "r4": r4, "r3": r3, "r2": r2, "r1": r1,
+                "excluded": abs(excluded),
+                "source": "api",
+                "updated_at": now,
+            })
+
+        # Сохраняем manual, остальное (api/xlsx) перезаписываем свежим API
         httpx.delete(
-            f"{SUPABASE_URL}/rest/v1/ratings_official?source=eq.api",
+            f"{SUPABASE_URL}/rest/v1/ratings_official?source=neq.manual",
             headers={**sb_headers(), "Prefer": "return=minimal"}, timeout=30,
         )
         httpx.delete(
-            f"{SUPABASE_URL}/rest/v1/settings?key=eq.last_ratings_sync",
-            headers={**sb_headers(), "Prefer": "return=minimal"}, timeout=10,
+            f"{SUPABASE_URL}/rest/v1/ratings_official?source=is.null",
+            headers={**sb_headers(), "Prefer": "return=minimal"}, timeout=15,
+        )
+        manual_resp = httpx.get(
+            f"{SUPABASE_URL}/rest/v1/ratings_official?source=eq.manual&select=article",
+            headers=sb_headers(), timeout=10,
+        )
+        manual_articles = {r["article"] for r in (manual_resp.json() if manual_resp.is_success else [])}
+        rows = [r for r in rows if r["article"] not in manual_articles]
+
+        saved = 0
+        for i in range(0, len(rows), 100):
+            batch = rows[i:i + 100]
+            resp = httpx.post(
+                f"{SUPABASE_URL}/rest/v1/ratings_official",
+                json=batch, headers=sb_headers(), timeout=30,
+            )
+            if resp.is_success:
+                saved += len(batch)
+            else:
+                logger.error(f"ratings_official insert: {resp.status_code} {resp.text[:300]}")
+
+        stamp = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M")
+        httpx.post(
+            f"{SUPABASE_URL}/rest/v1/settings?on_conflict=key",
+            json={"key": "last_ratings_upload", "value": stamp + " (API)", "updated_at": now},
+            headers={**sb_headers(), "Prefer": "resolution=merge-duplicates"}, timeout=10,
         )
         httpx.delete(
             f"{SUPABASE_URL}/rest/v1/settings?key=eq.last_ratings_sync_error",
             headers={**sb_headers(), "Prefer": "return=minimal"}, timeout=10,
         )
         invalidate_dash_cache()
+        logger.info(f"sync_ratings_official: saved {saved}/{len(rows)} from {len(items)} WB items")
+        return {"status": "ok", "saved": saved, "total_items": len(items)}
     except Exception as e:
-        logger.warning(f"sync_ratings_official cleanup: {e}")
-    logger.info("sync_ratings_official: skipped (use feedbacks + optional xlsx)")
-    return {"status": "skipped"}
+        logger.exception(f"sync_ratings_official error: {e}")
+        return {"status": "error", "error": str(e)}
+
 
 # ---------- Остатки на складах (WB Analytics: warehouse_remains report) ----------
 
@@ -4627,9 +4761,8 @@ scheduler.add_job(lambda: sync_article_daily_stats(30), "interval", hours=6, id=
 scheduler.add_job(sync_promotions, "interval", hours=6, id="sync_promotions")
 scheduler.add_job(lambda: sync_sales_pace("day"), "interval", hours=1, id="sync_sales_pace")
 scheduler.add_job(sync_spp_prices, "interval", hours=3, id="sync_spp_prices")
+scheduler.add_job(sync_ratings_official, "interval", hours=6, id="sync_ratings")
 scheduler.start()
-# Разово чистим ошибочные api-рейтинги после деплоя (item-rating ломал склейки).
-threading.Thread(target=sync_ratings_official, daemon=True).start()
 
 FRONTEND_CANDIDATES = [
     Path(__file__).resolve().parent.parent / "frontend",  # repo/frontend
@@ -4756,8 +4889,10 @@ async def save_manual_rating(request: dict):
 
 @app.post("/api/sync-ratings")
 def trigger_ratings_sync():
-    """Совместимость: больше не тянем item-rating; чистим битые api-рейтинги."""
-    return sync_ratings_official()
+    """Тянем оценки из WB Analytics item-rating v2 (фоном)."""
+    import threading
+    threading.Thread(target=sync_ratings_official, daemon=True).start()
+    return {"status": "started"}
 
 @app.post("/api/sync-stock")
 def trigger_stock_sync():
@@ -4856,6 +4991,10 @@ def invalidate_dash_cache():
         _DASH_CACHE["data"] = None
 
 
+# После деплоя / старта — сразу подтянуть оценки из WB API
+threading.Thread(target=sync_ratings_official, daemon=True).start()
+
+
 def _dash_get(path: str, timeout: float = 15):
     return httpx.get(f"{SUPABASE_URL}/rest/v1/{path}", headers=sb_headers(), timeout=timeout)
 
@@ -4888,14 +5027,27 @@ def dashboard_data():
         return ("groups", r.json() if r.is_success else [])
 
     def load_ratings():
-        # Как неделю назад: только xlsx/manual. source=api — прирост за период, ломает склейки.
-        r = _dash_get("ratings_official?select=*&source=neq.api", 15)
-        if not r.is_success:
-            r = _dash_get("ratings_official?select=*", 15)
-            rows = r.json() if r.is_success else []
-            rows = [x for x in rows if (x.get("source") or "") != "api"]
-            return ("ratings", rows)
-        return ("ratings", r.json() if r.is_success else [])
+        # manual > api/xlsx (более свежий при равном приоритете)
+        r = _dash_get("ratings_official?select=*", 20)
+        rows = r.json() if r.is_success else []
+        prio = {"manual": 0, "api": 1, "xlsx": 1}
+        best = {}
+        for row in rows:
+            art = row.get("article")
+            if not art:
+                continue
+            src = row.get("source") or "xlsx"
+            prev = best.get(art)
+            if not prev:
+                best[art] = row
+                continue
+            prev_src = prev.get("source") or "xlsx"
+            if prio.get(src, 9) < prio.get(prev_src, 9):
+                best[art] = row
+            elif prio.get(src, 9) == prio.get(prev_src, 9):
+                if (row.get("updated_at") or "") > (prev.get("updated_at") or ""):
+                    best[art] = row
+        return ("ratings", list(best.values()))
 
     def load_feedback_stats():
         r = _dash_rpc("get_article_stats", {}, 20)
