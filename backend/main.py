@@ -250,7 +250,7 @@ def sync_ratings_official():
         logger.error("sync_ratings_official: WB_TOKEN empty")
         return {"status": "error", "error": "WB_TOKEN empty"}
 
-    end = date.today()
+    end = date.today() - timedelta(days=1)  # WB: end нельзя ставить на сегодня
     start = end - timedelta(days=364)  # WB: не раньше чем год назад
     limit = 1000
     offset = 0
