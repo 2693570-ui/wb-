@@ -6200,6 +6200,19 @@ CITY_DEST_FALLBACKS = {
 }
 
 DELIVERY_WATCH_PATH = Path(__file__).resolve().parent / "data" / "delivery_watch.json"
+
+# Фиксированный список «Новые остатки» (артикул продавца → nmID WB).
+NEW_STOCK_ARTICLES = [
+    {"vendor_code": "19_HW-W11_Black", "nm_id": 758673912},
+    {"vendor_code": "19_HW-W11 розовые", "nm_id": 814320497},
+    {"vendor_code": "21_X10_Золото", "nm_id": 843103067},
+    {"vendor_code": "21_X10_Серебро", "nm_id": 797484479},
+    {"vendor_code": "22_YТ11_mini_gold", "nm_id": 1026016580},
+    {"vendor_code": "23_Ultra_ серый", "nm_id": 1140683241},
+    {"vendor_code": "24_ZK_GOLD", "nm_id": 1186458378},
+    {"vendor_code": "24_ZK_SILVER", "nm_id": 1215098632},
+    {"vendor_code": "25_SK_53", "nm_id": 1260345062},
+]
 _geo_dest_cache = {}  # city_id -> {dest, destinations, ts, address}
 _geo_dest_lock = threading.Lock()
 _wh_name_cache = {}  # wh_id -> name
@@ -7154,6 +7167,11 @@ def classify_delivery_eta(hours, qty: int) -> str:
     return "ok"
 
 
+@app.get("/api/delivery-coverage/articles")
+def delivery_coverage_articles():
+    return {"articles": NEW_STOCK_ARTICLES}
+
+
 @app.get("/api/delivery-coverage/cities")
 def delivery_coverage_cities():
     return {"cities": WB_DELIVERY_CITIES}
@@ -7172,28 +7190,17 @@ def save_delivery_watch(request: dict):
 
 
 @app.post("/api/delivery-coverage")
-def delivery_coverage(request: dict):
-    """Матрица ETA по городам для выбранных nm_id (прокси региональных остатков).
+def delivery_coverage(request: dict = None):
+    """Матрица остатков/ETA по фиксированным артикулам продавца × городам.
 
-    Body: {nm_ids: [int], city_ids?: [str]}
-    signal: time2 (часы) с card.wb.ru при dest покупателя в городе.
+    Body опционально: {city_ids?: [str]} — nm_ids всегда из NEW_STOCK_ARTICLES.
     """
-    if not isinstance(request, dict):
-        raise HTTPException(status_code=400, detail="invalid body")
+    if request is None or not isinstance(request, dict):
+        request = {}
 
-    raw_ids = request.get("nm_ids") or []
-    nm_ids = []
-    for x in raw_ids:
-        try:
-            n = int(x)
-        except (TypeError, ValueError):
-            continue
-        if n > 0 and n not in nm_ids:
-            nm_ids.append(n)
-        if len(nm_ids) >= 12:
-            break
-    if not nm_ids:
-        raise HTTPException(status_code=400, detail="nm_ids required")
+    articles = list(NEW_STOCK_ARTICLES)
+    nm_by_id = {a["nm_id"]: a for a in articles}
+    nm_ids = [a["nm_id"] for a in articles]
 
     city_ids = request.get("city_ids")
     cities = WB_DELIVERY_CITIES
@@ -7317,7 +7324,8 @@ def delivery_coverage(request: dict):
                 jobs.append((nm_id, c, pool.submit(_cell_for, nm_id, c)))
         results = {(nm_id, c["id"]): fut.result() for nm_id, c, fut in jobs}
 
-    for nm_id in nm_ids:
+    for art in articles:
+        nm_id = art["nm_id"]
         cells = []
         brief = None
         for c in city_meta:
@@ -7340,6 +7348,7 @@ def delivery_coverage(request: dict):
         covered = [c["city"] for c in cells if c.get("signal") in ("ok", "warn")]
         rows.append({
             **brief,
+            "vendor_code": art.get("vendor_code") or "",
             "cells": cells,
             "ship_to": ship_to,
             "covered": covered,
@@ -7347,6 +7356,7 @@ def delivery_coverage(request: dict):
 
     return {
         "updated_at": datetime.now(timezone.utc).isoformat(),
+        "articles": NEW_STOCK_ARTICLES,
         "cities": [{"id": c["id"], "name": c["name"], "dest": c.get("dest"), "address": c.get("address"), "error": c.get("error")} for c in city_meta],
         "thresholds": {
             "warn_hours": 40,

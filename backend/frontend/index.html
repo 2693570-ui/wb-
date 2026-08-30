@@ -736,19 +736,13 @@ td.tc{text-align:center}
 <div class="page" id="page-delivery-coverage">
   <div class="section-wrap" style="padding-bottom:8px">
     <div class="section-title">Новые остатки</div>
-    <div class="section-sub">Остаток и мин. срок доставки по городам (как на витрине WB). Жёлтый — доставка &gt;40ч, красный — &gt;60ч.</div>
+    <div class="section-sub">Остаток и мин. срок доставки по городам. Жёлтый — &gt;40ч, красный — &gt;60ч.</div>
   </div>
-  <div class="toolbar" style="align-items:flex-start;flex-wrap:wrap;gap:10px">
-    <textarea id="dcNmInput" rows="3" placeholder="nmID через запятую или с новой строки&#10;например: 843103067" style="width:min(420px,100%);border:1px solid var(--wb-border);border-radius:var(--rs);padding:8px 10px;font-size:12px;font-family:inherit;resize:vertical">843103067</textarea>
-    <div style="display:flex;flex-direction:column;gap:8px">
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="action-btn primary" id="dcRunBtn" onclick="runDeliveryCoverage()">↻ Обновить</button>
-        <button class="action-btn" onclick="saveDeliveryWatch()">Сохранить список</button>
-      </div>
-      <span id="dcInfo" style="font-size:12px;color:var(--wb-muted)">&gt;40ч жёлтый · &gt;60ч красный</span>
-    </div>
+  <div class="toolbar" style="align-items:center;flex-wrap:wrap;gap:10px">
+    <button class="action-btn primary" id="dcRunBtn" onclick="runDeliveryCoverage()">↻ Обновить</button>
+    <span id="dcInfo" style="font-size:12px;color:var(--wb-muted)">&gt;40ч жёлтый · &gt;60ч красный</span>
   </div>
-  <div id="dcRoot"><div class="empty" style="padding:40px 20px">Нажми «Обновить», чтобы загрузить остатки по городам</div></div>
+  <div id="dcRoot"><div class="loading"><div class="spinner"></div><span>Загружаем остатки…</span></div></div>
 </div>
 
 <div class="page" id="page-own-warehouse">
@@ -1965,58 +1959,16 @@ async function saveOwnWhModel(safeVc) {
 }
 
 let DC_LAST = null;
-let DC_WATCH_LOADED = false;
-
-function parseDcNmIds() {
-  const raw = (document.getElementById('dcNmInput')?.value || '');
-  const ids = [];
-  const seen = new Set();
-  raw.split(/[\s,;]+/).forEach(p => {
-    const n = parseInt(String(p).trim(), 10);
-    if(!n || n < 1 || seen.has(n)) return;
-    seen.add(n);
-    ids.push(n);
-  });
-  return ids.slice(0, 20);
-}
+let DC_LOADED_ONCE = false;
 
 async function initDeliveryCoveragePage() {
-  if(!DC_WATCH_LOADED) {
-    DC_WATCH_LOADED = true;
-    await loadDeliveryWatch(true);
-    const input = document.getElementById('dcNmInput');
-    if(input && !String(input.value||'').trim()) input.value = '843103067';
+  if(DC_LAST) {
+    renderDeliveryCoverage(DC_LAST);
+    return;
   }
-  if(DC_LAST) renderDeliveryCoverage(DC_LAST);
-}
-
-async function loadDeliveryWatch(silent) {
-  const info = document.getElementById('dcInfo');
-  try {
-    const r = await fetch(`${RAILWAY_URL}/api/delivery-coverage/watch`);
-    const d = await r.json();
-    const ids = d.nm_ids || [];
-    const input = document.getElementById('dcNmInput');
-    if(input && ids.length) input.value = ids.join('\n');
-    if(!silent && info) info.textContent = ids.length ? `Список: ${ids.length} арт.` : 'Список пуст';
-  } catch(e) {
-    if(!silent && info) info.textContent = 'Не удалось загрузить список';
-  }
-}
-
-async function saveDeliveryWatch() {
-  const info = document.getElementById('dcInfo');
-  const ids = parseDcNmIds();
-  try {
-    const r = await fetch(`${RAILWAY_URL}/api/delivery-coverage/watch`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({nm_ids: ids})
-    });
-    const d = await r.json();
-    if(info) info.textContent = `Сохранено: ${(d.nm_ids||[]).length} арт.`;
-  } catch(e) {
-    if(info) info.textContent = 'Ошибка сохранения';
+  if(!DC_LOADED_ONCE) {
+    DC_LOADED_ONCE = true;
+    await runDeliveryCoverage();
   }
 }
 
@@ -2024,25 +1976,14 @@ async function runDeliveryCoverage() {
   const info = document.getElementById('dcInfo');
   const root = document.getElementById('dcRoot');
   const btn = document.getElementById('dcRunBtn');
-  const ids = parseDcNmIds();
-  if(!ids.length) {
-    if(info) info.textContent = 'Добавь хотя бы один nmID';
-    return;
-  }
   if(btn) { btn.disabled = true; btn.textContent = 'Обновляем…'; }
-  if(root) root.innerHTML = `<div class="loading"><div class="spinner"></div><span>Обновляем остатки по ${ids.length} арт. × 12 городам…</span></div>`;
+  if(root) root.innerHTML = `<div class="loading"><div class="spinner"></div><span>Обновляем остатки по 9 артикулам × 12 городам…</span></div>`;
   if(info) info.textContent = 'Опрос витрины WB…';
   try {
-    // сохраняем список при каждом обновлении
-    fetch(`${RAILWAY_URL}/api/delivery-coverage/watch`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({nm_ids: ids})
-    }).catch(() => {});
     const r = await fetch(`${RAILWAY_URL}/api/delivery-coverage`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({nm_ids: ids})
+      body: JSON.stringify({})
     });
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
@@ -2093,13 +2034,14 @@ function renderDeliveryCoverage(data) {
     const ship = (it.ship_to || []).length
       ? `<div class="dc-ship">Слабо / нет: ${escapeHtml((it.ship_to||[]).join(', '))}</div>`
       : '';
+    const artLabel = escapeHtml(it.vendor_code || String(it.nm_id || ''));
     return `<tr>
       <td class="mcol-art">
         <div style="display:flex;gap:8px;align-items:center">
           <img src="${escapeHtml(it.thumb||'')}" alt="" width="36" height="48" style="object-fit:cover;border-radius:4px;background:#f3f3f3" onerror="this.style.display='none'">
           <div>
-            <div class="art">${it.nm_id}</div>
-            <div class="nmid">${escapeHtml(it.brand||'')} ${escapeHtml(it.name||'')}</div>
+            <div class="art">${artLabel}</div>
+            <div class="nmid">${escapeHtml(it.brand||'')} · ${it.nm_id||''}</div>
             ${ship}
           </div>
         </div>
