@@ -28,6 +28,10 @@ except Exception as _studio_imp_err:
     logger.warning(f"studio router not loaded: {_studio_imp_err}")
 
 WB_TOKEN = os.getenv("WB_TOKEN", "")
+# Cookie-строка с www.wildberries.ru (как в DevTools → Request Headers → cookie).
+# Нужна для __internal/card/.../detail — полный список складов как в MKeeper.
+WB_SITE_COOKIE = (os.getenv("WB_SITE_COOKIE") or "").strip()
+WB_SPA_VERSION = (os.getenv("WB_SPA_VERSION") or "14.22.5").strip() or "14.22.5"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 WB_FEEDBACKS_URL = "https://feedbacks-api.wildberries.ru"
@@ -7055,18 +7059,97 @@ def _wh_name(wh_id):
     return name
 
 
-def fetch_wb_delivery_eta(nm_id: int, dest: int, hide_dtype=None) -> dict:
-    """Срок доставки и склады выдачи с клиентской карточки (card.wb.ru).
+def _parse_wb_card_product(p: dict, nm_id: int, source: str) -> dict:
+    """Разбор products[0] карточки: nearest = min(time1+time2) по всем stocks."""
+    stocks = []
+    for size in p.get("sizes") or []:
+        for s in size.get("stocks") or []:
+            stocks.append({
+                "wh": s.get("wh"),
+                "qty": s.get("qty"),
+                "time1": s.get("time1"),
+                "time2": s.get("time2"),
+                "dist": s.get("dist"),
+                "dtype": s.get("dtype"),
+            })
+    time1 = p.get("time1")
+    time2 = p.get("time2")
+    qty = p.get("totalQuantity")
+    try:
+        qty = int(qty) if qty is not None else 0
+    except (TypeError, ValueError):
+        qty = 0
+    try:
+        t1 = int(time1) if time1 is not None else 0
+    except (TypeError, ValueError):
+        t1 = 0
+    try:
+        t2 = int(time2) if time2 is not None else None
+    except (TypeError, ValueError):
+        t2 = None
+    nearest_qty = qty
+    nearest_wh = p.get("wh")
+    nearest_dist = p.get("dist")
+    if stocks:
+        def _stock_hours(s):
+            try:
+                a = int(s.get("time1") or 0)
+            except (TypeError, ValueError):
+                a = 0
+            try:
+                b = int(s.get("time2") or 0)
+            except (TypeError, ValueError):
+                b = 0
+            return a + b
 
-    hide_dtype=1 часто убирает FBS из приоритета и показывает ближайший склад WB
-    (как первая строка в МКипере), иначе для СПб/юга остаётся Подольск ~120ч.
+        nearest = min(stocks, key=_stock_hours)
+        try:
+            nearest_qty = int(nearest.get("qty") or 0)
+        except (TypeError, ValueError):
+            nearest_qty = 0
+        nearest_wh = nearest.get("wh")
+        nearest_dist = nearest.get("dist")
+        try:
+            t1 = int(nearest.get("time1") or 0)
+        except (TypeError, ValueError):
+            t1 = 0
+        try:
+            t2 = int(nearest.get("time2")) if nearest.get("time2") is not None else t2
+        except (TypeError, ValueError):
+            pass
+    hours = (t1 + t2) if t2 is not None else None
+    return {
+        "ok": True,
+        "nm_id": p.get("id") or nm_id,
+        "brand": p.get("brand") or "",
+        "name": p.get("name") or "",
+        "time1": t1,
+        "time2": t2,
+        "hours": hours,
+        "qty": nearest_qty,
+        "total_qty": qty,
+        "wh": nearest_wh,
+        "dist": nearest_dist,
+        "stocks": stocks,
+        "source": source,
+        "error": None,
+    }
+
+
+def fetch_wb_delivery_eta(nm_id: int, dest: int, hide_dtype=None) -> dict:
+    """Срок доставки и склады: сначала __internal (как MKeeper), иначе card.wb.ru.
+
+    WB_SITE_COOKIE — cookie с wildberries.ru; без неё __internal даёт 403,
+    остаётся урезанный публичный card (часто 1 склад).
+    hide_dtype=1 — запасной фильтр FBS на публичке.
     """
-    headers = {
+    base_headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
         ),
         "Accept": "*/*",
+        "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
         "Origin": "https://www.wildberries.ru",
         "Referer": f"https://www.wildberries.ru/catalog/{nm_id}/detail.aspx",
     }
@@ -7076,93 +7159,60 @@ def fetch_wb_delivery_eta(nm_id: int, dest: int, hide_dtype=None) -> dict:
         "dest": dest,
         "spp": 30,
         "nm": nm_id,
+        "lang": "ru",
+        "ab_testing": "false",
+        # Параметры с витрины WB — полный список stocks (HAR / MKeeper).
+        "hide_vflags": 4294967296,
+        "mtype": 257,
     }
     if hide_dtype is not None:
         params["hide_dtype"] = hide_dtype
+
+    endpoints = []
+    if WB_SITE_COOKIE:
+        endpoints.append((
+            "internal",
+            "https://www.wildberries.ru/__internal/card/cards/v4/detail",
+            {
+                **base_headers,
+                "Cookie": WB_SITE_COOKIE,
+                "x-requested-with": "XMLHttpRequest",
+                "x-spa-version": WB_SPA_VERSION,
+            },
+        ))
+    endpoints.append((
+        "card",
+        "https://card.wb.ru/cards/v4/detail",
+        base_headers,
+    ))
+
+    last_err = None
     try:
-        with httpx.Client(timeout=20, headers=headers, follow_redirects=True) as client:
-            resp = client.get(
-                "https://card.wb.ru/cards/v4/detail",
-                params=params,
-            )
-        if not resp.is_success:
-            return {"ok": False, "error": f"http {resp.status_code}"}
-        products = resp.json().get("products") or []
-        if not products:
-            return {"ok": False, "error": "product not found"}
-        p = products[0]
-        stocks = []
-        for size in p.get("sizes") or []:
-            for s in size.get("stocks") or []:
-                stocks.append({
-                    "wh": s.get("wh"),
-                    "qty": s.get("qty"),
-                    "time1": s.get("time1"),
-                    "time2": s.get("time2"),
-                    "dist": s.get("dist"),
-                })
-        time1 = p.get("time1")
-        time2 = p.get("time2")
-        qty = p.get("totalQuantity")
-        try:
-            qty = int(qty) if qty is not None else 0
-        except (TypeError, ValueError):
-            qty = 0
-        try:
-            t1 = int(time1) if time1 is not None else 0
-        except (TypeError, ValueError):
-            t1 = 0
-        try:
-            t2 = int(time2) if time2 is not None else None
-        except (TypeError, ValueError):
-            t2 = None
-        # Ближайший склад (мин. time1+time2) — как строка в МКипере.
-        nearest_qty = qty
-        nearest_wh = p.get("wh")
-        nearest_dist = p.get("dist")
-        if stocks:
-            def _stock_hours(s):
-                try:
-                    a = int(s.get("time1") or 0)
-                except (TypeError, ValueError):
-                    a = 0
-                try:
-                    b = int(s.get("time2") or 0)
-                except (TypeError, ValueError):
-                    b = 0
-                return a + b
-            nearest = min(stocks, key=_stock_hours)
+        for source, url, headers in endpoints:
             try:
-                nearest_qty = int(nearest.get("qty") or 0)
-            except (TypeError, ValueError):
-                nearest_qty = 0
-            nearest_wh = nearest.get("wh")
-            nearest_dist = nearest.get("dist")
+                with httpx.Client(timeout=20, headers=headers, follow_redirects=True) as client:
+                    resp = client.get(url, params=params)
+            except Exception as e:
+                last_err = str(e)[:160]
+                continue
+            if not resp.is_success:
+                last_err = f"{source} http {resp.status_code}"
+                if source == "internal" and resp.status_code in (401, 403):
+                    logger.warning(
+                        "WB __internal card auth failed (%s) — check WB_SITE_COOKIE",
+                        resp.status_code,
+                    )
+                continue
             try:
-                t1 = int(nearest.get("time1") or 0)
-            except (TypeError, ValueError):
-                t1 = 0
-            try:
-                t2 = int(nearest.get("time2")) if nearest.get("time2") is not None else t2
-            except (TypeError, ValueError):
-                pass
-        # На витрине дата доставки ≈ time1 (сборка/отгрузка) + time2 (логистика).
-        hours = (t1 + t2) if t2 is not None else None
-        return {
-            "ok": True,
-            "nm_id": p.get("id") or nm_id,
-            "brand": p.get("brand") or "",
-            "name": p.get("name") or "",
-            "time1": t1,
-            "time2": t2,
-            "hours": hours,
-            "qty": nearest_qty,
-            "total_qty": qty,
-            "wh": nearest_wh,
-            "dist": nearest_dist,
-            "stocks": stocks,
-            "error": None,
-        }
+                products = resp.json().get("products") or []
+            except Exception as e:
+                last_err = f"{source} json {e}"
+                continue
+            if not products:
+                last_err = f"{source} product not found"
+                continue
+            return _parse_wb_card_product(products[0], nm_id, source)
+        return {"ok": False, "error": last_err or "fetch failed"}
     except Exception as e:
         return {"ok": False, "error": str(e)[:160]}
 
@@ -7287,7 +7337,14 @@ def delivery_coverage(request: dict = None):
                 hours0 = eta.get("hours")
                 if hours0 is None and eta.get("time2") is not None:
                     hours0 = (eta.get("time1") or 0) + eta.get("time2")
-            if (not eta.get("ok")) or (hours0 is not None and hours0 > 40) or not (eta.get("qty") or 0):
+            # hide_dtype только если ответ урезан (1 склад / публичка) и срок плохой.
+            stocks_n = len(eta.get("stocks") or []) if eta.get("ok") else 0
+            need_hide = (
+                (not eta.get("ok"))
+                or not (eta.get("qty") or 0)
+                or (hours0 is not None and hours0 > 40 and stocks_n <= 1)
+            )
+            if need_hide:
                 etas.append(fetch_wb_delivery_eta(nm_id, dest, hide_dtype=1))
 
             for eta in etas:
@@ -7377,6 +7434,8 @@ def delivery_coverage(request: dict = None):
 
     return {
         "updated_at": datetime.now(timezone.utc).isoformat(),
+        "site_cookie": bool(WB_SITE_COOKIE),
+        "card_mode": "internal" if WB_SITE_COOKIE else "public",
         "articles": NEW_STOCK_ARTICLES,
         "cities": [{"id": c["id"], "name": c["name"], "dest": c.get("dest"), "address": c.get("address"), "error": c.get("error")} for c in city_meta],
         "thresholds": {
