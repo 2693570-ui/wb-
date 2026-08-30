@@ -2031,9 +2031,6 @@ function renderDeliveryCoverage(data) {
       ].filter(Boolean).join(' · ');
       return `<td class="dc-${sig} dc-cell" title="${escapeHtml(tip)}">${inner}</td>`;
     }).join('');
-    const ship = (it.ship_to || []).length
-      ? `<div class="dc-ship">Слабо / нет: ${escapeHtml((it.ship_to||[]).join(', '))}</div>`
-      : '';
     const artLabel = escapeHtml(it.vendor_code || String(it.nm_id || ''));
     return `<tr>
       <td class="mcol-art">
@@ -2042,7 +2039,6 @@ function renderDeliveryCoverage(data) {
           <div>
             <div class="art">${artLabel}</div>
             <div class="nmid">${escapeHtml(it.brand||'')} · ${it.nm_id||''}</div>
-            ${ship}
           </div>
         </div>
       </td>${cells}
