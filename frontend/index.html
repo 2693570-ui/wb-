@@ -742,7 +742,7 @@ td.tc{text-align:center}
     <button class="action-btn primary" id="dcRunBtn" onclick="runDeliveryCoverage()">↻ Обновить</button>
     <span id="dcInfo" style="font-size:12px;color:var(--wb-muted)">&gt;40ч жёлтый · &gt;60ч красный</span>
   </div>
-  <div id="dcRoot"><div class="loading"><div class="spinner"></div><span>Загружаем остатки…</span></div></div>
+  <div id="dcRoot"><div class="empty" style="padding:40px 20px">Нажми «Обновить», чтобы загрузить остатки по городам</div></div>
 </div>
 
 <div class="page" id="page-own-warehouse">
@@ -2021,17 +2021,39 @@ async function saveOwnWhModel(safeVc) {
 }
 
 let DC_LAST = null;
-let DC_LOADED_ONCE = false;
+const DC_CACHE_KEY = 'wb_delivery_coverage_cache';
 
-async function initDeliveryCoveragePage() {
+function loadDeliveryCoverageCache() {
+  try {
+    const raw = localStorage.getItem(DC_CACHE_KEY);
+    if(!raw) return null;
+    const d = JSON.parse(raw);
+    if(!d || !Array.isArray(d.items)) return null;
+    return d;
+  } catch(e) {
+    return null;
+  }
+}
+
+function saveDeliveryCoverageCache(data) {
+  try {
+    localStorage.setItem(DC_CACHE_KEY, JSON.stringify(data));
+  } catch(e) {}
+}
+
+function initDeliveryCoveragePage() {
+  if(!DC_LAST) DC_LAST = loadDeliveryCoverageCache();
   if(DC_LAST) {
     renderDeliveryCoverage(DC_LAST);
+    const info = document.getElementById('dcInfo');
+    const when = DC_LAST.updated_at ? new Date(DC_LAST.updated_at).toLocaleString('ru-RU') : '';
+    if(info) info.textContent = when
+      ? `Сохранено с ${when} · нажми «Обновить» для свежих данных`
+      : '>40ч жёлтый · >60ч красный';
     return;
   }
-  if(!DC_LOADED_ONCE) {
-    DC_LOADED_ONCE = true;
-    await runDeliveryCoverage();
-  }
+  const root = document.getElementById('dcRoot');
+  if(root) root.innerHTML = `<div class="empty" style="padding:40px 20px">Нажми «Обновить», чтобы загрузить остатки по городам</div>`;
 }
 
 async function runDeliveryCoverage() {
@@ -2050,6 +2072,7 @@ async function runDeliveryCoverage() {
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
     DC_LAST = d;
+    saveDeliveryCoverageCache(d);
     renderDeliveryCoverage(d);
     const when = d.updated_at ? new Date(d.updated_at).toLocaleString('ru-RU') : 'сейчас';
     if(info) info.textContent = `Обновлено ${when} · >40ч жёлтый · >60ч красный`;
