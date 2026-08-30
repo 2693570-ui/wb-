@@ -6197,6 +6197,8 @@ WB_DELIVERY_CITIES = [
 # Координаты Москвы смещены на восток (ближе к типичному «хорошему» dest).
 CITY_DEST_FALLBACKS = {
     "moscow": [-1257786, -1029256],
+    # СПб: xinfo часто тянет FBS Подольск (~120ч); восточный/южный dest + hide_dtype дают склад WB.
+    "spb": [-369515, -1186630, -1198055, -1124448],
 }
 
 DELIVERY_WATCH_PATH = Path(__file__).resolve().parent / "data" / "delivery_watch.json"
@@ -7051,8 +7053,12 @@ def _wh_name(wh_id):
     return name
 
 
-def fetch_wb_delivery_eta(nm_id: int, dest: int) -> dict:
-    """Срок доставки и склады выдачи с клиентской карточки (card.wb.ru)."""
+def fetch_wb_delivery_eta(nm_id: int, dest: int, hide_dtype=None) -> dict:
+    """Срок доставки и склады выдачи с клиентской карточки (card.wb.ru).
+
+    hide_dtype=1 часто убирает FBS из приоритета и показывает ближайший склад WB
+    (как первая строка в МКипере), иначе для СПб/юга остаётся Подольск ~120ч.
+    """
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -7062,17 +7068,20 @@ def fetch_wb_delivery_eta(nm_id: int, dest: int) -> dict:
         "Origin": "https://www.wildberries.ru",
         "Referer": f"https://www.wildberries.ru/catalog/{nm_id}/detail.aspx",
     }
+    params = {
+        "appType": 1,
+        "curr": "rub",
+        "dest": dest,
+        "spp": 30,
+        "nm": nm_id,
+    }
+    if hide_dtype is not None:
+        params["hide_dtype"] = hide_dtype
     try:
         with httpx.Client(timeout=20, headers=headers, follow_redirects=True) as client:
             resp = client.get(
                 "https://card.wb.ru/cards/v4/detail",
-                params={
-                    "appType": 1,
-                    "curr": "rub",
-                    "dest": dest,
-                    "spp": 30,
-                    "nm": nm_id,
-                },
+                params=params,
             )
         if not resp.is_success:
             return {"ok": False, "error": f"http {resp.status_code}"}
@@ -7268,21 +7277,31 @@ def delivery_coverage(request: dict = None):
         best = None
         last_err = None
         for dest in candidates:
+            # Если без фильтра срок длинный — пробуем hide_dtype=1 (склад WB вместо FBS).
             eta = fetch_wb_delivery_eta(nm_id, dest)
-            if not eta.get("ok"):
-                last_err = eta.get("error") or "fetch failed"
-                continue
-            hours = eta.get("hours")
-            qty = eta.get("qty") or 0
-            if hours is None and eta.get("time2") is not None:
-                hours = (eta.get("time1") or 0) + eta.get("time2")
-            # Берём вариант с наличием и минимальным сроком (как ближайший ПВЗ у МКипера).
-            if qty <= 0 or hours is None:
-                if best is None and last_err is None:
-                    last_err = "no stock"
-                continue
-            if best is None or hours < best["hours"]:
-                best = {**eta, "hours": hours, "dest": dest}
+            etas = [eta]
+            hours0 = None
+            if eta.get("ok"):
+                hours0 = eta.get("hours")
+                if hours0 is None and eta.get("time2") is not None:
+                    hours0 = (eta.get("time1") or 0) + eta.get("time2")
+            if (not eta.get("ok")) or (hours0 is not None and hours0 > 40) or not (eta.get("qty") or 0):
+                etas.append(fetch_wb_delivery_eta(nm_id, dest, hide_dtype=1))
+
+            for eta in etas:
+                if not eta.get("ok"):
+                    last_err = eta.get("error") or "fetch failed"
+                    continue
+                hours = eta.get("hours")
+                qty = eta.get("qty") or 0
+                if hours is None and eta.get("time2") is not None:
+                    hours = (eta.get("time1") or 0) + eta.get("time2")
+                if qty <= 0 or hours is None:
+                    if best is None and last_err is None:
+                        last_err = "no stock"
+                    continue
+                if best is None or hours < best["hours"]:
+                    best = {**eta, "hours": hours, "dest": dest}
 
         if best is None:
             cell["error"] = last_err or c.get("error") or "no stock"
