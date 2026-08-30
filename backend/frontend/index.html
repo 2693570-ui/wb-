@@ -1249,26 +1249,71 @@ function rc(v) {
   return '#F04438';
 }
 
-function showSection(sec, btn) {
+const PAGE_SECTION = {
+  products: 'products',
+  ratings: 'products',
+  groups: 'products',
+  'sales-pace': 'growth',
+  promotions: 'promotions',
+  prices: 'promotions',
+  'supply-recs': 'supplies',
+  'own-warehouse': 'supplies',
+  'delivery-coverage': 'supplies',
+  competitors: 'analytics',
+  positions: 'positions',
+  shelves: 'positions',
+  'my-shelves': 'positions',
+  visual: 'visual',
+  ads: 'ads',
+  finance: 'finance',
+};
+
+const SECTION_DEFAULT_PAGE = {
+  products: 'products',
+  growth: 'sales-pace',
+  promotions: 'promotions',
+  supplies: 'supply-recs',
+  ads: 'ads',
+  analytics: 'competitors',
+  positions: 'positions',
+  visual: 'visual',
+  finance: 'finance',
+};
+
+function saveNavState(pageId) {
+  try { localStorage.setItem('wb_nav_page', pageId); } catch(e) {}
+  try {
+    if(location.hash !== '#' + pageId) history.replaceState(null, '', '#' + pageId);
+  } catch(e) {}
+}
+
+function applySection(sec, btn) {
   document.querySelectorAll('.tb-nav-item').forEach(t => t.classList.remove('on'));
-  btn.classList.add('on');
-  document.getElementById('subnav-products').style.display = sec === 'products' ? 'flex' : 'none';
-  document.getElementById('subnav-supplies').style.display = sec === 'supplies' ? 'flex' : 'none';
+  if(btn) {
+    btn.classList.add('on');
+  } else {
+    document.querySelectorAll('.tb-nav-item').forEach(el => {
+      const oc = el.getAttribute('onclick') || '';
+      if(oc.includes("'" + sec + "'") || oc.includes('"' + sec + '"')) el.classList.add('on');
+    });
+  }
+  const subProducts = document.getElementById('subnav-products');
+  const subSupplies = document.getElementById('subnav-supplies');
+  if(subProducts) subProducts.style.display = sec === 'products' ? 'flex' : 'none';
+  if(subSupplies) subSupplies.style.display = sec === 'supplies' ? 'flex' : 'none';
   const sg = document.getElementById('subnav-growth');
   if(sg) sg.style.display = sec === 'growth' ? 'flex' : 'none';
   const sp = document.getElementById('subnav-promotions');
   if(sp) sp.style.display = sec === 'promotions' ? 'flex' : 'none';
   const spos = document.getElementById('subnav-positions');
   if(spos) spos.style.display = sec === 'positions' ? 'flex' : 'none';
-  if(sec === 'products') showPage('products', document.querySelector('#subnav-products .sn-item'));
-  else if(sec === 'growth') showPage('sales-pace', document.querySelector('#subnav-growth .sn-item'));
-  else if(sec === 'promotions') showPage('promotions', document.querySelector('#subnav-promotions .sn-item'));
-  else if(sec === 'supplies') showPage('supply-recs', document.querySelector('#subnav-supplies .sn-item'));
-  else if(sec === 'ads') showPage('ads', null);
-  else if(sec === 'analytics') showPage('competitors', null);
-  else if(sec === 'positions') showPage('positions', document.querySelector('#subnav-positions .sn-item'));
-  else if(sec === 'visual') showPage('visual', null);
-  else if(sec === 'finance') showPage('finance', null);
+}
+
+function showSection(sec, btn) {
+  applySection(sec, btn);
+  const pageId = SECTION_DEFAULT_PAGE[sec] || 'products';
+  const pageBtn = document.querySelector(`.sn-item[onclick*="'${pageId}'"]`);
+  showPage(pageId, pageBtn || null);
 }
 
 function showPage(id, btn) {
@@ -1281,6 +1326,11 @@ function showPage(id, btn) {
   }
   page.classList.add('on');
   if(btn) btn.classList.add('on');
+  else {
+    const found = document.querySelector(`.sn-item[onclick*="'${id}'"]`);
+    if(found) found.classList.add('on');
+  }
+  saveNavState(id);
   if(id === 'groups') renderGroupManager();
   if(id === 'products') renderProducts();
   if(id === 'supply-recs') renderSupplyRecs();
@@ -1296,6 +1346,18 @@ function showPage(id, btn) {
   if(id === 'my-shelves') renderMyShelvesPage();
   if(id === 'visual') renderVisualPage();
   if(id === 'finance') renderFinance();
+}
+
+function restoreNavState() {
+  let pageId = '';
+  try { pageId = (location.hash || '').replace(/^#/, ''); } catch(e) {}
+  if(!pageId) {
+    try { pageId = localStorage.getItem('wb_nav_page') || ''; } catch(e) {}
+  }
+  if(!pageId || !document.getElementById('page-' + pageId)) pageId = 'products';
+  const sec = PAGE_SECTION[pageId] || 'products';
+  applySection(sec, null);
+  showPage(pageId, null);
 }
 
 async function loadAdsPage() {
