@@ -6199,6 +6199,8 @@ CITY_DEST_FALLBACKS = {
     "moscow": [-1257786, -1029256],
     # СПб: xinfo часто тянет FBS Подольск (~120ч); восточный/южный dest + hide_dtype дают склад WB.
     "spb": [-369515, -1186630, -1198055, -1124448],
+    # Казань: часть destinations даёт ~126ч; рабочие dest ~45–47ч со склада WB.
+    "kazan": [-2133467, -2133462, -2133466, -2133463],
 }
 
 DELIVERY_WATCH_PATH = Path(__file__).resolve().parent / "data" / "delivery_watch.json"
