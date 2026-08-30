@@ -309,6 +309,14 @@ td.tc{text-align:center}
 .matrix .own-bad{background:#FEE4E2!important;color:#B42318;font-weight:700}
 .matrix .own-warn{background:#FEF0C7!important;color:#B54708;font-weight:700}
 .matrix .own-ok{background:#D1FADF!important;color:#027A48;font-weight:600}
+.dc-ok{background:#D1FADF!important;color:#027A48;font-weight:600}
+.dc-warn{background:#FEF0C7!important;color:#B54708;font-weight:600}
+.dc-bad{background:#FEE4E2!important;color:#B42318;font-weight:700}
+.dc-none{background:#F2F4F7!important;color:#667085}
+.dc-cell{line-height:1.25;text-align:center}
+.dc-cell .dc-qty{font-size:13px}
+.dc-cell .dc-hrs{font-size:11px;opacity:.9}
+.dc-ship{font-size:11px;color:#B42318;margin-top:4px}
 .ow-model-btn{display:inline-flex;align-items:center;gap:4px;max-width:220px;border:1px solid var(--wb-border);background:#fff;border-radius:6px;padding:4px 8px;font-size:12px;font-family:inherit;color:var(--wb-text);cursor:pointer;text-align:left;line-height:1.3}
 .ow-model-btn:hover{border-color:var(--wb-purple);background:var(--wb-purple-light)}
 .ow-model-btn .ow-mname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
@@ -556,6 +564,7 @@ td.tc{text-align:center}
 <div class="subnav" id="subnav-supplies" style="display:none">
   <div class="sn-item on" onclick="showPage('supply-recs',this)">Рекомендации поставок</div>
   <div class="sn-item" onclick="showPage('own-warehouse',this)">Наш склад</div>
+  <div class="sn-item" onclick="showPage('delivery-coverage',this)">НОВЫЕ ОСТАТКИ</div>
 </div>
 <div class="subnav" id="subnav-positions" style="display:none">
   <div class="sn-item on" onclick="showPage('positions',this)">Позиции в поиске</div>
@@ -722,6 +731,24 @@ td.tc{text-align:center}
   </div>
   <div class="cards" id="supplyCards"></div>
   <div id="supplyRoot"><div class="loading"><div class="spinner"></div><span>Загружаем рекомендации...</span></div></div>
+</div>
+
+<div class="page" id="page-delivery-coverage">
+  <div class="section-wrap" style="padding-bottom:8px">
+    <div class="section-title">Новые остатки</div>
+    <div class="section-sub">Остаток и мин. срок доставки по городам (как на витрине WB). Жёлтый — доставка &gt;40ч, красный — &gt;60ч.</div>
+  </div>
+  <div class="toolbar" style="align-items:flex-start;flex-wrap:wrap;gap:10px">
+    <textarea id="dcNmInput" rows="3" placeholder="nmID через запятую или с новой строки&#10;например: 843103067" style="width:min(420px,100%);border:1px solid var(--wb-border);border-radius:var(--rs);padding:8px 10px;font-size:12px;font-family:inherit;resize:vertical">843103067</textarea>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="action-btn primary" id="dcRunBtn" onclick="runDeliveryCoverage()">↻ Обновить</button>
+        <button class="action-btn" onclick="saveDeliveryWatch()">Сохранить список</button>
+      </div>
+      <span id="dcInfo" style="font-size:12px;color:var(--wb-muted)">&gt;40ч жёлтый · &gt;60ч красный</span>
+    </div>
+  </div>
+  <div id="dcRoot"><div class="empty" style="padding:40px 20px">Нажми «Обновить», чтобы загрузить остатки по городам</div></div>
 </div>
 
 <div class="page" id="page-own-warehouse">
@@ -1264,6 +1291,7 @@ function showPage(id, btn) {
   if(id === 'products') renderProducts();
   if(id === 'supply-recs') renderSupplyRecs();
   if(id === 'own-warehouse') renderOwnWarehouse(true);
+  if(id === 'delivery-coverage') initDeliveryCoveragePage();
   if(id === 'ads') loadAdsPage();
   if(id === 'competitors') renderCompetitors();
   if(id === 'promotions') renderPromotions();
@@ -1934,6 +1962,154 @@ async function saveOwnWhModel(safeVc) {
   } catch(e) {
     alert('Не удалось сохранить: ' + e.message);
   }
+}
+
+let DC_LAST = null;
+let DC_WATCH_LOADED = false;
+
+function parseDcNmIds() {
+  const raw = (document.getElementById('dcNmInput')?.value || '');
+  const ids = [];
+  const seen = new Set();
+  raw.split(/[\s,;]+/).forEach(p => {
+    const n = parseInt(String(p).trim(), 10);
+    if(!n || n < 1 || seen.has(n)) return;
+    seen.add(n);
+    ids.push(n);
+  });
+  return ids.slice(0, 20);
+}
+
+async function initDeliveryCoveragePage() {
+  if(!DC_WATCH_LOADED) {
+    DC_WATCH_LOADED = true;
+    await loadDeliveryWatch(true);
+    const input = document.getElementById('dcNmInput');
+    if(input && !String(input.value||'').trim()) input.value = '843103067';
+  }
+  if(DC_LAST) renderDeliveryCoverage(DC_LAST);
+}
+
+async function loadDeliveryWatch(silent) {
+  const info = document.getElementById('dcInfo');
+  try {
+    const r = await fetch(`${RAILWAY_URL}/api/delivery-coverage/watch`);
+    const d = await r.json();
+    const ids = d.nm_ids || [];
+    const input = document.getElementById('dcNmInput');
+    if(input && ids.length) input.value = ids.join('\n');
+    if(!silent && info) info.textContent = ids.length ? `Список: ${ids.length} арт.` : 'Список пуст';
+  } catch(e) {
+    if(!silent && info) info.textContent = 'Не удалось загрузить список';
+  }
+}
+
+async function saveDeliveryWatch() {
+  const info = document.getElementById('dcInfo');
+  const ids = parseDcNmIds();
+  try {
+    const r = await fetch(`${RAILWAY_URL}/api/delivery-coverage/watch`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({nm_ids: ids})
+    });
+    const d = await r.json();
+    if(info) info.textContent = `Сохранено: ${(d.nm_ids||[]).length} арт.`;
+  } catch(e) {
+    if(info) info.textContent = 'Ошибка сохранения';
+  }
+}
+
+async function runDeliveryCoverage() {
+  const info = document.getElementById('dcInfo');
+  const root = document.getElementById('dcRoot');
+  const btn = document.getElementById('dcRunBtn');
+  const ids = parseDcNmIds();
+  if(!ids.length) {
+    if(info) info.textContent = 'Добавь хотя бы один nmID';
+    return;
+  }
+  if(btn) { btn.disabled = true; btn.textContent = 'Обновляем…'; }
+  if(root) root.innerHTML = `<div class="loading"><div class="spinner"></div><span>Обновляем остатки по ${ids.length} арт. × 12 городам…</span></div>`;
+  if(info) info.textContent = 'Опрос витрины WB…';
+  try {
+    // сохраняем список при каждом обновлении
+    fetch(`${RAILWAY_URL}/api/delivery-coverage/watch`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({nm_ids: ids})
+    }).catch(() => {});
+    const r = await fetch(`${RAILWAY_URL}/api/delivery-coverage`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({nm_ids: ids})
+    });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    DC_LAST = d;
+    renderDeliveryCoverage(d);
+    const when = d.updated_at ? new Date(d.updated_at).toLocaleString('ru-RU') : 'сейчас';
+    if(info) info.textContent = `Обновлено ${when} · >40ч жёлтый · >60ч красный`;
+  } catch(e) {
+    if(root) root.innerHTML = `<div class="empty" style="padding:40px 20px">Ошибка: ${escapeHtml(e.message||String(e))}</div>`;
+    if(info) info.textContent = 'Ошибка запроса';
+  } finally {
+    if(btn) { btn.disabled = false; btn.textContent = '↻ Обновить'; }
+  }
+}
+
+function renderDeliveryCoverage(data) {
+  const root = document.getElementById('dcRoot');
+  if(!root) return;
+  const cities = data.cities || [];
+  const items = data.items || [];
+  if(!items.length) {
+    root.innerHTML = `<div class="empty" style="padding:40px 20px">Нет данных</div>`;
+    return;
+  }
+  const head = cities.map(c => `<th title="${escapeHtml(c.address||c.name)}">${escapeHtml(c.name)}</th>`).join('');
+  const body = items.map(it => {
+    const cells = (it.cells || []).map(c => {
+      const sig = c.signal || 'none';
+      let inner = '—';
+      if(c.error && !c.hours && !c.qty) {
+        inner = `<div class="dc-hrs">err</div>`;
+      } else if(sig === 'none') {
+        inner = `<div class="dc-qty">нет</div>`;
+      } else {
+        const qty = c.qty != null ? c.qty : '—';
+        const hrs = c.hours != null ? `${c.hours}ч` : '—';
+        inner = `<div class="dc-qty">${qty} шт</div><div class="dc-hrs">${hrs}</div>`;
+      }
+      const tip = [
+        c.city,
+        c.hours != null ? `${c.hours}ч` : '',
+        c.qty != null ? `${c.qty} шт` : '',
+        c.wh_name || (c.wh ? `wh ${c.wh}` : ''),
+        c.error || ''
+      ].filter(Boolean).join(' · ');
+      return `<td class="dc-${sig} dc-cell" title="${escapeHtml(tip)}">${inner}</td>`;
+    }).join('');
+    const ship = (it.ship_to || []).length
+      ? `<div class="dc-ship">Слабо / нет: ${escapeHtml((it.ship_to||[]).join(', '))}</div>`
+      : '';
+    return `<tr>
+      <td class="mcol-art">
+        <div style="display:flex;gap:8px;align-items:center">
+          <img src="${escapeHtml(it.thumb||'')}" alt="" width="36" height="48" style="object-fit:cover;border-radius:4px;background:#f3f3f3" onerror="this.style.display='none'">
+          <div>
+            <div class="art">${it.nm_id}</div>
+            <div class="nmid">${escapeHtml(it.brand||'')} ${escapeHtml(it.name||'')}</div>
+            ${ship}
+          </div>
+        </div>
+      </td>${cells}
+    </tr>`;
+  }).join('');
+  root.innerHTML = `<div class="matrix-wrap"><table class="matrix">
+    <thead><tr><th class="mcol-art">Артикул</th>${head}</tr></thead>
+    <tbody>${body}</tbody>
+  </table></div>`;
 }
 
 async function setSalesWindow(v) {

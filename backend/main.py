@@ -6163,6 +6163,7 @@ async def save_finance_cfo(request: dict):
 SEARCH_KEYWORDS_PATH = Path(__file__).resolve().parent / "data" / "search_keywords.json"
 
 # dest — регион выдачи витрины WB (как у покупателя). Москва по умолчанию.
+# Для поиска оставляем исторические dest; для сроков доставки — WB_DELIVERY_CITIES + geo.
 WB_SEARCH_CITIES = [
     {"id": "moscow", "name": "Москва", "dest": -1257786},
     {"id": "spb", "name": "Санкт-Петербург", "dest": -1124448},
@@ -6175,6 +6176,35 @@ WB_SEARCH_CITIES = [
     {"id": "samara", "name": "Самара", "dest": -1235864},
     {"id": "chelyabinsk", "name": "Челябинск", "dest": -1382589},
 ]
+
+# Города для «Новые остатки» (клиентский ETA + qty ближайшего склада).
+WB_DELIVERY_CITIES = [
+    {"id": "moscow", "name": "Москва", "lat": 55.7500, "lon": 37.8500},
+    {"id": "spb", "name": "Санкт-Петербург", "lat": 59.9343, "lon": 30.3351},
+    {"id": "krasnodar", "name": "Краснодар", "lat": 45.0355, "lon": 38.9753},
+    {"id": "kazan", "name": "Казань", "lat": 55.7961, "lon": 49.1064},
+    {"id": "ekb", "name": "Екатеринбург", "lat": 56.8389, "lon": 60.6057},
+    {"id": "omsk", "name": "Омск", "lat": 54.9885, "lon": 73.3242},
+    {"id": "nsk", "name": "Новосибирск", "lat": 55.0084, "lon": 82.9357},
+    {"id": "krasnoyarsk", "name": "Красноярск", "lat": 56.0153, "lon": 92.8932},
+    {"id": "nn", "name": "Нижний Новгород", "lat": 56.2965, "lon": 43.9361},
+    {"id": "samara", "name": "Самара", "lat": 53.1959, "lon": 50.1002},
+    {"id": "rostov", "name": "Ростов-на-Дону", "lat": 47.2357, "lon": 39.7015},
+    {"id": "volgograd", "name": "Волгоград", "lat": 48.7080, "lon": 44.5133},
+]
+
+# У Москвы xinfo у центра часто завышает ETA — пробуем несколько dest и берём мин. срок.
+# Координаты Москвы смещены на восток (ближе к типичному «хорошему» dest).
+CITY_DEST_FALLBACKS = {
+    "moscow": [-1257786, -1029256],
+}
+
+DELIVERY_WATCH_PATH = Path(__file__).resolve().parent / "data" / "delivery_watch.json"
+_geo_dest_cache = {}  # city_id -> {dest, destinations, ts, address}
+_geo_dest_lock = threading.Lock()
+_wh_name_cache = {}  # wh_id -> name
+_wh_name_lock = threading.Lock()
+_wh_name_loaded_at = 0.0
 
 _wb_search_lock = threading.Lock()
 _wb_search_last_ts = 0.0
@@ -6865,6 +6895,465 @@ def get_competitor_shelf(nm_id: int, dest: int = -1257786, limit: int = 15):
         "items": shelf.get("items") or [],
         "shelf_total": shelf.get("total") or 0,
         "error": shelf.get("error"),
+    }
+
+
+def _load_delivery_watch() -> dict:
+    try:
+        with open(DELIVERY_WATCH_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {"nm_ids": [], "updated_at": None}
+        ids = []
+        for x in data.get("nm_ids") or []:
+            try:
+                n = int(x)
+            except (TypeError, ValueError):
+                continue
+            if n > 0 and n not in ids:
+                ids.append(n)
+        return {"nm_ids": ids[:40], "updated_at": data.get("updated_at")}
+    except FileNotFoundError:
+        return {"nm_ids": [], "updated_at": None}
+    except Exception as e:
+        logger.error(f"delivery_watch load: {e}")
+        return {"nm_ids": [], "updated_at": None, "error": str(e)}
+
+
+def _save_delivery_watch(nm_ids: list) -> dict:
+    clean = []
+    for x in nm_ids or []:
+        try:
+            n = int(x)
+        except (TypeError, ValueError):
+            continue
+        if n > 0 and n not in clean:
+            clean.append(n)
+        if len(clean) >= 40:
+            break
+    payload = {
+        "nm_ids": clean,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    DELIVERY_WATCH_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(DELIVERY_WATCH_PATH, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    return payload
+
+
+def resolve_wb_city_dest(city: dict, ttl_sec: int = 6 * 3600) -> dict:
+    """Актуальный dest покупателя для города через user-geo-data.wildberries.ru."""
+    cid = city.get("id") or ""
+    now = time.time()
+    with _geo_dest_lock:
+        cached = _geo_dest_cache.get(cid)
+        if cached and now - cached.get("ts", 0) < ttl_sec and cached.get("dest") is not None:
+            return cached
+
+    lat, lon = city.get("lat"), city.get("lon")
+    name = city.get("name") or cid
+    result = {
+        "id": cid,
+        "name": name,
+        "dest": None,
+        "destinations": [],
+        "address": None,
+        "error": None,
+        "ts": now,
+    }
+    if lat is None or lon is None:
+        result["error"] = "lat/lon required"
+        return result
+
+    url = "https://user-geo-data.wildberries.ru/get-geo-info"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "locale": "ru",
+        "address": name,
+    }
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json",
+    }
+    try:
+        with httpx.Client(timeout=20, headers=headers, follow_redirects=True) as client:
+            resp = client.get(url, params=params)
+        if not resp.is_success:
+            result["error"] = f"geo http {resp.status_code}"
+            return result
+        data = resp.json()
+        xinfo = data.get("xinfo") or ""
+        dest = None
+        if "dest=" in xinfo:
+            try:
+                dest = int(xinfo.split("dest=")[1].split("&")[0])
+            except (TypeError, ValueError, IndexError):
+                dest = None
+        destinations = []
+        for d in data.get("destinations") or []:
+            try:
+                destinations.append(int(d))
+            except (TypeError, ValueError):
+                pass
+        if dest is None and destinations:
+            dest = destinations[-1]
+        result.update({
+            "dest": dest,
+            "destinations": destinations,
+            "address": data.get("address") or name,
+            "error": None if dest is not None else "dest not found",
+        })
+    except Exception as e:
+        result["error"] = str(e)[:160]
+        return result
+
+    if result.get("dest") is not None:
+        with _geo_dest_lock:
+            _geo_dest_cache[cid] = result
+    return result
+
+
+# Частые склады продавца/WB — без скачивания 15MB stores-data на каждый запрос.
+_WH_NAME_SEED = {
+    302066: "Склад продавца Подольск 4",
+}
+
+
+def _wh_name(wh_id):
+    if wh_id is None:
+        return None
+    try:
+        wid = int(wh_id)
+    except (TypeError, ValueError):
+        return None
+    if wid in _wh_name_cache:
+        return _wh_name_cache[wid]
+    name = _WH_NAME_SEED.get(wid)
+    if name:
+        _wh_name_cache[wid] = name
+    return name
+
+
+def fetch_wb_delivery_eta(nm_id: int, dest: int) -> dict:
+    """Срок доставки и склады выдачи с клиентской карточки (card.wb.ru)."""
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+        ),
+        "Accept": "*/*",
+        "Origin": "https://www.wildberries.ru",
+        "Referer": f"https://www.wildberries.ru/catalog/{nm_id}/detail.aspx",
+    }
+    try:
+        with httpx.Client(timeout=20, headers=headers, follow_redirects=True) as client:
+            resp = client.get(
+                "https://card.wb.ru/cards/v4/detail",
+                params={
+                    "appType": 1,
+                    "curr": "rub",
+                    "dest": dest,
+                    "spp": 30,
+                    "nm": nm_id,
+                },
+            )
+        if not resp.is_success:
+            return {"ok": False, "error": f"http {resp.status_code}"}
+        products = resp.json().get("products") or []
+        if not products:
+            return {"ok": False, "error": "product not found"}
+        p = products[0]
+        stocks = []
+        for size in p.get("sizes") or []:
+            for s in size.get("stocks") or []:
+                stocks.append({
+                    "wh": s.get("wh"),
+                    "qty": s.get("qty"),
+                    "time1": s.get("time1"),
+                    "time2": s.get("time2"),
+                    "dist": s.get("dist"),
+                })
+        time1 = p.get("time1")
+        time2 = p.get("time2")
+        qty = p.get("totalQuantity")
+        try:
+            qty = int(qty) if qty is not None else 0
+        except (TypeError, ValueError):
+            qty = 0
+        try:
+            t1 = int(time1) if time1 is not None else 0
+        except (TypeError, ValueError):
+            t1 = 0
+        try:
+            t2 = int(time2) if time2 is not None else None
+        except (TypeError, ValueError):
+            t2 = None
+        # Ближайший склад (мин. time1+time2) — как строка в МКипере.
+        nearest_qty = qty
+        nearest_wh = p.get("wh")
+        nearest_dist = p.get("dist")
+        if stocks:
+            def _stock_hours(s):
+                try:
+                    a = int(s.get("time1") or 0)
+                except (TypeError, ValueError):
+                    a = 0
+                try:
+                    b = int(s.get("time2") or 0)
+                except (TypeError, ValueError):
+                    b = 0
+                return a + b
+            nearest = min(stocks, key=_stock_hours)
+            try:
+                nearest_qty = int(nearest.get("qty") or 0)
+            except (TypeError, ValueError):
+                nearest_qty = 0
+            nearest_wh = nearest.get("wh")
+            nearest_dist = nearest.get("dist")
+            try:
+                t1 = int(nearest.get("time1") or 0)
+            except (TypeError, ValueError):
+                t1 = 0
+            try:
+                t2 = int(nearest.get("time2")) if nearest.get("time2") is not None else t2
+            except (TypeError, ValueError):
+                pass
+        # На витрине дата доставки ≈ time1 (сборка/отгрузка) + time2 (логистика).
+        hours = (t1 + t2) if t2 is not None else None
+        return {
+            "ok": True,
+            "nm_id": p.get("id") or nm_id,
+            "brand": p.get("brand") or "",
+            "name": p.get("name") or "",
+            "time1": t1,
+            "time2": t2,
+            "hours": hours,
+            "qty": nearest_qty,
+            "total_qty": qty,
+            "wh": nearest_wh,
+            "dist": nearest_dist,
+            "stocks": stocks,
+            "error": None,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:160]}
+
+
+def classify_delivery_eta(hours, qty: int) -> str:
+    """Цвета по мин. сроку доставки (time1+time2): >40жёлтый, >60красный."""
+    if not qty or hours is None:
+        return "none"
+    if hours > 60:
+        return "bad"
+    if hours > 40:
+        return "warn"
+    return "ok"
+
+
+@app.get("/api/delivery-coverage/cities")
+def delivery_coverage_cities():
+    return {"cities": WB_DELIVERY_CITIES}
+
+
+@app.get("/api/delivery-coverage/watch")
+def get_delivery_watch():
+    return _load_delivery_watch()
+
+
+@app.post("/api/delivery-coverage/watch")
+def save_delivery_watch(request: dict):
+    if not isinstance(request, dict):
+        raise HTTPException(status_code=400, detail="invalid body")
+    return _save_delivery_watch(request.get("nm_ids") or [])
+
+
+@app.post("/api/delivery-coverage")
+def delivery_coverage(request: dict):
+    """Матрица ETA по городам для выбранных nm_id (прокси региональных остатков).
+
+    Body: {nm_ids: [int], city_ids?: [str]}
+    signal: time2 (часы) с card.wb.ru при dest покупателя в городе.
+    """
+    if not isinstance(request, dict):
+        raise HTTPException(status_code=400, detail="invalid body")
+
+    raw_ids = request.get("nm_ids") or []
+    nm_ids = []
+    for x in raw_ids:
+        try:
+            n = int(x)
+        except (TypeError, ValueError):
+            continue
+        if n > 0 and n not in nm_ids:
+            nm_ids.append(n)
+        if len(nm_ids) >= 12:
+            break
+    if not nm_ids:
+        raise HTTPException(status_code=400, detail="nm_ids required")
+
+    city_ids = request.get("city_ids")
+    cities = WB_DELIVERY_CITIES
+    if isinstance(city_ids, list) and city_ids:
+        wanted = {str(c) for c in city_ids}
+        cities = [c for c in WB_DELIVERY_CITIES if c["id"] in wanted]
+        if not cities:
+            cities = WB_DELIVERY_CITIES
+
+    # 1) dest по городам (параллельно)
+    city_meta = []
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futs = {pool.submit(resolve_wb_city_dest, c): c for c in cities}
+        geo_by_id = {}
+        for fut in as_completed(futs):
+            c = futs[fut]
+            try:
+                geo_by_id[c["id"]] = fut.result()
+            except Exception as e:
+                geo_by_id[c["id"]] = {"dest": None, "address": c["name"], "error": str(e)[:120]}
+    for c in cities:
+        geo = geo_by_id.get(c["id"]) or {}
+        dest_candidates = []
+        # fallbacks первыми: у Москвы xinfo/центр часто врёт по сроку
+        for d in [
+            *(CITY_DEST_FALLBACKS.get(c["id"]) or []),
+            geo.get("dest"),
+            *(geo.get("destinations") or []),
+        ]:
+            try:
+                di = int(d)
+            except (TypeError, ValueError):
+                continue
+            if di not in dest_candidates:
+                dest_candidates.append(di)
+        city_meta.append({
+            "id": c["id"],
+            "name": c["name"],
+            "dest": geo.get("dest"),
+            "dest_candidates": dest_candidates[:6],
+            "address": geo.get("address"),
+            "error": geo.get("error"),
+        })
+
+    def _cell_for(nm_id: int, c: dict) -> dict:
+        candidates = c.get("dest_candidates") or ([c.get("dest")] if c.get("dest") is not None else [])
+        cell = {
+            "city_id": c["id"],
+            "city": c["name"],
+            "dest": c.get("dest"),
+            "hours": None,
+            "days": None,
+            "qty": 0,
+            "wh": None,
+            "wh_name": None,
+            "dist": None,
+            "signal": "none",
+            "error": c.get("error"),
+            "stocks": [],
+            "_brief": None,
+        }
+        if not candidates:
+            return cell
+
+        best = None
+        last_err = None
+        for dest in candidates:
+            eta = fetch_wb_delivery_eta(nm_id, dest)
+            if not eta.get("ok"):
+                last_err = eta.get("error") or "fetch failed"
+                continue
+            hours = eta.get("hours")
+            qty = eta.get("qty") or 0
+            if hours is None and eta.get("time2") is not None:
+                hours = (eta.get("time1") or 0) + eta.get("time2")
+            # Берём вариант с наличием и минимальным сроком (как ближайший ПВЗ у МКипера).
+            if qty <= 0 or hours is None:
+                if best is None and last_err is None:
+                    last_err = "no stock"
+                continue
+            if best is None or hours < best["hours"]:
+                best = {**eta, "hours": hours, "dest": dest}
+
+        if best is None:
+            cell["error"] = last_err or c.get("error") or "no stock"
+            return cell
+
+        hours = best.get("hours")
+        qty = best.get("qty") or 0
+        days = round(hours / 24.0, 1) if hours is not None else None
+        wh = best.get("wh")
+        cell.update({
+            "dest": best.get("dest"),
+            "hours": hours,
+            "days": days,
+            "time1": best.get("time1"),
+            "time2": best.get("time2"),
+            "qty": qty,
+            "wh": wh,
+            "wh_name": _wh_name(wh),
+            "dist": best.get("dist"),
+            "signal": classify_delivery_eta(hours, qty),
+            "error": None,
+            "stocks": best.get("stocks") or [],
+            "_brief": {
+                "nm_id": best.get("nm_id") or nm_id,
+                "brand": best.get("brand") or "",
+                "name": best.get("name") or "",
+                "thumb": wb_product_thumb_url(best.get("nm_id") or nm_id),
+                "url": f"https://www.wildberries.ru/catalog/{best.get('nm_id') or nm_id}/detail.aspx",
+            },
+        })
+        return cell
+
+    # 2) ETA nm × city (параллельно)
+    rows = []
+    jobs = []
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        for nm_id in nm_ids:
+            for c in city_meta:
+                jobs.append((nm_id, c, pool.submit(_cell_for, nm_id, c)))
+        results = {(nm_id, c["id"]): fut.result() for nm_id, c, fut in jobs}
+
+    for nm_id in nm_ids:
+        cells = []
+        brief = None
+        for c in city_meta:
+            cell = results.get((nm_id, c["id"])) or {
+                "city_id": c["id"], "city": c["name"], "signal": "none", "qty": 0, "error": "missing",
+            }
+            if not brief and cell.get("_brief"):
+                brief = cell["_brief"]
+            cell.pop("_brief", None)
+            cells.append(cell)
+        if not brief:
+            brief = {
+                "nm_id": nm_id,
+                "brand": "",
+                "name": "",
+                "thumb": wb_product_thumb_url(nm_id),
+                "url": f"https://www.wildberries.ru/catalog/{nm_id}/detail.aspx",
+            }
+        ship_to = [c["city"] for c in cells if c.get("signal") in ("bad", "none")]
+        covered = [c["city"] for c in cells if c.get("signal") in ("ok", "warn")]
+        rows.append({
+            **brief,
+            "cells": cells,
+            "ship_to": ship_to,
+            "covered": covered,
+        })
+
+    return {
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "cities": [{"id": c["id"], "name": c["name"], "dest": c.get("dest"), "address": c.get("address"), "error": c.get("error")} for c in city_meta],
+        "thresholds": {
+            "warn_hours": 40,
+            "bad_hours": 60,
+            "note": "qty ближайшего склада · часы = time1+time2; >40ч жёлтый · >60ч красный",
+        },
+        "items": rows,
     }
 
 
