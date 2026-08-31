@@ -736,11 +736,11 @@ td.tc{text-align:center}
 <div class="page" id="page-delivery-coverage">
   <div class="section-wrap" style="padding-bottom:8px">
     <div class="section-title">Новые остатки</div>
-    <div class="section-sub">Остаток и мин. срок доставки по городам. Жёлтый — &gt;40ч, красный — &gt;60ч.</div>
+    <div class="section-sub">Срок как у клиента на витрине (не ближайший склад MKeeper). Жёлтый — &gt;40ч, красный — &gt;60ч.</div>
   </div>
   <div class="toolbar" style="align-items:center;flex-wrap:wrap;gap:10px">
     <button class="action-btn primary" id="dcRunBtn" onclick="runDeliveryCoverage()">↻ Обновить</button>
-    <span id="dcInfo" style="font-size:12px;color:var(--wb-muted)">&gt;40ч жёлтый · &gt;60ч красный</span>
+    <span id="dcInfo" style="font-size:12px;color:var(--wb-muted)">клиентский срок · &gt;40ч жёлтый · &gt;60ч красный</span>
   </div>
   <div id="dcRoot"><div class="empty" style="padding:40px 20px">Нажми «Обновить», чтобы загрузить остатки по городам</div></div>
 </div>
@@ -2049,7 +2049,7 @@ function initDeliveryCoveragePage() {
     const when = DC_LAST.updated_at ? new Date(DC_LAST.updated_at).toLocaleString('ru-RU') : '';
     if(info) info.textContent = when
       ? `Сохранено с ${when} · нажми «Обновить» для свежих данных`
-      : '>40ч жёлтый · >60ч красный';
+      : 'клиентский срок · >40ч жёлтый · >60ч красный';
     return;
   }
   const root = document.getElementById('dcRoot');
@@ -2075,7 +2075,7 @@ async function runDeliveryCoverage() {
     saveDeliveryCoverageCache(d);
     renderDeliveryCoverage(d);
     const when = d.updated_at ? new Date(d.updated_at).toLocaleString('ru-RU') : 'сейчас';
-    if(info) info.textContent = `Обновлено ${when} · >40ч жёлтый · >60ч красный`;
+    if(info) info.textContent = `Обновлено ${when} · клиентский срок · >40ч жёлтый · >60ч красный`;
   } catch(e) {
     if(root) root.innerHTML = `<div class="empty" style="padding:40px 20px">Ошибка: ${escapeHtml(e.message||String(e))}</div>`;
     if(info) info.textContent = 'Ошибка запроса';
@@ -2107,13 +2107,17 @@ function renderDeliveryCoverage(data) {
         const hrs = c.hours != null ? `${c.hours}ч` : '—';
         inner = `<div class="dc-qty">${qty} шт</div><div class="dc-hrs">${hrs}</div>`;
       }
-      const tip = [
+      const tipParts = [
         c.city,
-        c.hours != null ? `${c.hours}ч` : '',
+        c.hours != null ? `клиент ${c.hours}ч` : '',
         c.qty != null ? `${c.qty} шт` : '',
         c.wh_name || (c.wh ? `wh ${c.wh}` : ''),
+        (c.nearest_hours != null && c.nearest_hours !== c.hours)
+          ? `ближайший склад ${c.nearest_hours}ч (${c.nearest_qty || 0} шт)`
+          : '',
         c.error || ''
-      ].filter(Boolean).join(' · ');
+      ].filter(Boolean);
+      const tip = tipParts.join(' · ');
       return `<td class="dc-${sig} dc-cell" title="${escapeHtml(tip)}">${inner}</td>`;
     }).join('');
     const artLabel = escapeHtml(it.vendor_code || String(it.nm_id || ''));

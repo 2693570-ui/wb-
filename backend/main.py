@@ -7059,8 +7059,20 @@ def _wh_name(wh_id):
     return name
 
 
+def _stock_hours(s: dict) -> int:
+    try:
+        a = int(s.get("time1") or 0)
+    except (TypeError, ValueError):
+        a = 0
+    try:
+        b = int(s.get("time2") or 0)
+    except (TypeError, ValueError):
+        b = 0
+    return a + b
+
+
 def _parse_wb_card_product(p: dict, nm_id: int, source: str) -> dict:
-    """Разбор products[0] карточки: nearest = min(time1+time2) по всем stocks."""
+    """Разбор products[0]: hours = срок витрины (как у клиента), nearest_* = как MKeeper."""
     stocks = []
     for size in p.get("sizes") or []:
         for s in size.get("stocks") or []:
@@ -7072,52 +7084,47 @@ def _parse_wb_card_product(p: dict, nm_id: int, source: str) -> dict:
                 "dist": s.get("dist"),
                 "dtype": s.get("dtype"),
             })
-    time1 = p.get("time1")
-    time2 = p.get("time2")
-    qty = p.get("totalQuantity")
     try:
-        qty = int(qty) if qty is not None else 0
+        total_qty = int(p.get("totalQuantity")) if p.get("totalQuantity") is not None else 0
     except (TypeError, ValueError):
-        qty = 0
+        total_qty = 0
     try:
-        t1 = int(time1) if time1 is not None else 0
+        t1 = int(p.get("time1")) if p.get("time1") is not None else 0
     except (TypeError, ValueError):
         t1 = 0
     try:
-        t2 = int(time2) if time2 is not None else None
+        t2 = int(p.get("time2")) if p.get("time2") is not None else None
     except (TypeError, ValueError):
         t2 = None
-    nearest_qty = qty
-    nearest_wh = p.get("wh")
-    nearest_dist = p.get("dist")
-    if stocks:
-        def _stock_hours(s):
-            try:
-                a = int(s.get("time1") or 0)
-            except (TypeError, ValueError):
-                a = 0
-            try:
-                b = int(s.get("time2") or 0)
-            except (TypeError, ValueError):
-                b = 0
-            return a + b
+    # Срок у кнопки «В корзину» — time1+time2 на уровне product, не min(stocks).
+    client_hours = (t1 + t2) if t2 is not None else None
 
+    serving_wh = p.get("wh")
+    serving_dist = p.get("dist")
+    serving_qty = total_qty
+    if stocks and serving_wh is not None:
+        match = next((s for s in stocks if s.get("wh") == serving_wh), None)
+        if match is not None:
+            try:
+                serving_qty = int(match.get("qty") or 0)
+            except (TypeError, ValueError):
+                serving_qty = 0
+            serving_dist = match.get("dist", serving_dist)
+
+    nearest_hours = None
+    nearest_qty = 0
+    nearest_wh = None
+    nearest_dist = None
+    if stocks:
         nearest = min(stocks, key=_stock_hours)
+        nearest_hours = _stock_hours(nearest)
         try:
             nearest_qty = int(nearest.get("qty") or 0)
         except (TypeError, ValueError):
             nearest_qty = 0
         nearest_wh = nearest.get("wh")
         nearest_dist = nearest.get("dist")
-        try:
-            t1 = int(nearest.get("time1") or 0)
-        except (TypeError, ValueError):
-            t1 = 0
-        try:
-            t2 = int(nearest.get("time2")) if nearest.get("time2") is not None else t2
-        except (TypeError, ValueError):
-            pass
-    hours = (t1 + t2) if t2 is not None else None
+
     return {
         "ok": True,
         "nm_id": p.get("id") or nm_id,
@@ -7125,11 +7132,15 @@ def _parse_wb_card_product(p: dict, nm_id: int, source: str) -> dict:
         "name": p.get("name") or "",
         "time1": t1,
         "time2": t2,
-        "hours": hours,
-        "qty": nearest_qty,
-        "total_qty": qty,
-        "wh": nearest_wh,
-        "dist": nearest_dist,
+        "hours": client_hours,
+        "qty": serving_qty if serving_qty else total_qty,
+        "total_qty": total_qty,
+        "wh": serving_wh,
+        "dist": serving_dist,
+        "nearest_hours": nearest_hours,
+        "nearest_qty": nearest_qty,
+        "nearest_wh": nearest_wh,
+        "nearest_dist": nearest_dist,
         "stocks": stocks,
         "source": source,
         "error": None,
@@ -7218,7 +7229,7 @@ def fetch_wb_delivery_eta(nm_id: int, dest: int, hide_dtype=None) -> dict:
 
 
 def classify_delivery_eta(hours, qty: int) -> str:
-    """Цвета по мин. сроку доставки (time1+time2): >40жёлтый, >60красный."""
+    """Цвета по клиентскому сроку витрины (product time1+time2): >40жёлтый, >60красный."""
     if not qty or hours is None:
         return "none"
     if hours > 60:
@@ -7285,11 +7296,11 @@ def delivery_coverage(request: dict = None):
     for c in cities:
         geo = geo_by_id.get(c["id"]) or {}
         dest_candidates = []
-        # fallbacks первыми: у Москвы xinfo/центр часто врёт по сроку
+        # Сначала geo dest города (что видит клиент там), fallbacks — запасные.
         for d in [
-            *(CITY_DEST_FALLBACKS.get(c["id"]) or []),
             geo.get("dest"),
             *(geo.get("destinations") or []),
+            *(CITY_DEST_FALLBACKS.get(c["id"]) or []),
         ]:
             try:
                 di = int(d)
@@ -7318,6 +7329,10 @@ def delivery_coverage(request: dict = None):
             "wh": None,
             "wh_name": None,
             "dist": None,
+            "nearest_hours": None,
+            "nearest_qty": 0,
+            "nearest_wh": None,
+            "nearest_wh_name": None,
             "signal": "none",
             "error": c.get("error"),
             "stocks": [],
@@ -7329,47 +7344,36 @@ def delivery_coverage(request: dict = None):
         best = None
         last_err = None
         for dest in candidates:
-            # Если без фильтра срок длинный — пробуем hide_dtype=1 (склад WB вместо FBS).
+            # Без hide_dtype: как витрина по умолчанию (клиентский срок).
             eta = fetch_wb_delivery_eta(nm_id, dest)
-            etas = [eta]
-            hours0 = None
-            if eta.get("ok"):
-                hours0 = eta.get("hours")
-                if hours0 is None and eta.get("time2") is not None:
-                    hours0 = (eta.get("time1") or 0) + eta.get("time2")
-            # hide_dtype только если ответ урезан (1 склад / публичка) и срок плохой.
-            stocks_n = len(eta.get("stocks") or []) if eta.get("ok") else 0
-            need_hide = (
-                (not eta.get("ok"))
-                or not (eta.get("qty") or 0)
-                or (hours0 is not None and hours0 > 40 and stocks_n <= 1)
-            )
-            if need_hide:
-                etas.append(fetch_wb_delivery_eta(nm_id, dest, hide_dtype=1))
-
-            for eta in etas:
-                if not eta.get("ok"):
-                    last_err = eta.get("error") or "fetch failed"
-                    continue
-                hours = eta.get("hours")
-                qty = eta.get("qty") or 0
-                if hours is None and eta.get("time2") is not None:
-                    hours = (eta.get("time1") or 0) + eta.get("time2")
-                if qty <= 0 or hours is None:
-                    if best is None and last_err is None:
-                        last_err = "no stock"
-                    continue
-                if best is None or hours < best["hours"]:
-                    best = {**eta, "hours": hours, "dest": dest}
+            if not eta.get("ok"):
+                last_err = eta.get("error") or "fetch failed"
+                # Запасной запрос только если основной не ответил.
+                eta = fetch_wb_delivery_eta(nm_id, dest, hide_dtype=1)
+            if not eta.get("ok"):
+                last_err = eta.get("error") or last_err or "fetch failed"
+                continue
+            hours = eta.get("hours")
+            qty = eta.get("qty") or eta.get("total_qty") or 0
+            if hours is None and eta.get("time2") is not None:
+                hours = (eta.get("time1") or 0) + eta.get("time2")
+            if qty <= 0 or hours is None:
+                if last_err is None:
+                    last_err = "no stock"
+                continue
+            # Первый успешный dest (geo) — не min по fallbacks (иначе оптимизм как MKeeper).
+            best = {**eta, "hours": hours, "dest": dest}
+            break
 
         if best is None:
             cell["error"] = last_err or c.get("error") or "no stock"
             return cell
 
         hours = best.get("hours")
-        qty = best.get("qty") or 0
+        qty = best.get("qty") or best.get("total_qty") or 0
         days = round(hours / 24.0, 1) if hours is not None else None
         wh = best.get("wh")
+        nearest_wh = best.get("nearest_wh")
         cell.update({
             "dest": best.get("dest"),
             "hours": hours,
@@ -7377,11 +7381,17 @@ def delivery_coverage(request: dict = None):
             "time1": best.get("time1"),
             "time2": best.get("time2"),
             "qty": qty,
+            "total_qty": best.get("total_qty") or qty,
             "wh": wh,
             "wh_name": _wh_name(wh),
             "dist": best.get("dist"),
+            "nearest_hours": best.get("nearest_hours"),
+            "nearest_qty": best.get("nearest_qty") or 0,
+            "nearest_wh": nearest_wh,
+            "nearest_wh_name": _wh_name(nearest_wh),
             "signal": classify_delivery_eta(hours, qty),
             "error": None,
+            "source": best.get("source"),
             "stocks": best.get("stocks") or [],
             "_brief": {
                 "nm_id": best.get("nm_id") or nm_id,
@@ -7441,7 +7451,7 @@ def delivery_coverage(request: dict = None):
         "thresholds": {
             "warn_hours": 40,
             "bad_hours": 60,
-            "note": "qty ближайшего склада · часы = time1+time2; >40ч жёлтый · >60ч красный",
+            "note": "часы = срок витрины (как у клиента); nearest_* — ближайший склад как в MKeeper; >40ч жёлтый · >60ч красный",
         },
         "items": rows,
     }
