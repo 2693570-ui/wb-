@@ -6208,9 +6208,10 @@ CITY_DEST_FALLBACKS = {
 }
 
 DELIVERY_WATCH_PATH = Path(__file__).resolve().parent / "data" / "delivery_watch.json"
+NEW_STOCK_ARTICLES_PATH = Path(__file__).resolve().parent / "data" / "new_stock_articles.json"
 
-# Фиксированный список «Новые остатки» (артикул продавца → nmID WB).
-NEW_STOCK_ARTICLES = [
+# Дефолт Vi-Smart; партнёр переопределяет через NEW_STOCK_ARTICLES_JSON или data/new_stock_articles.json.
+_DEFAULT_NEW_STOCK_ARTICLES = [
     {"vendor_code": "19_HW-W11_Black", "nm_id": 758673912},
     {"vendor_code": "19_HW-W11 розовые", "nm_id": 814320497},
     {"vendor_code": "21_X10_Золото", "nm_id": 843103067},
@@ -6221,6 +6222,51 @@ NEW_STOCK_ARTICLES = [
     {"vendor_code": "24_ZK_SILVER", "nm_id": 1215098632},
     {"vendor_code": "25_SK_53", "nm_id": 1260345062},
 ]
+
+
+def _normalize_new_stock_articles(raw) -> list:
+    out = []
+    if not isinstance(raw, list):
+        return out
+    for row in raw:
+        if not isinstance(row, dict):
+            continue
+        vc = (row.get("vendor_code") or row.get("article") or "").strip()
+        nm = row.get("nm_id") or row.get("nmId") or row.get("nmID")
+        try:
+            nm_id = int(nm)
+        except (TypeError, ValueError):
+            continue
+        if not vc or nm_id <= 0:
+            continue
+        out.append({"vendor_code": vc, "nm_id": nm_id})
+    return out
+
+
+def _load_new_stock_articles() -> list:
+    env_raw = (os.getenv("NEW_STOCK_ARTICLES_JSON") or "").strip()
+    if env_raw:
+        try:
+            parsed = _normalize_new_stock_articles(json.loads(env_raw))
+            if parsed:
+                logger.info("NEW_STOCK_ARTICLES from env: %s items", len(parsed))
+                return parsed
+            logger.warning("NEW_STOCK_ARTICLES_JSON empty after parse — using default")
+        except Exception as e:
+            logger.warning("NEW_STOCK_ARTICLES_JSON invalid: %s", e)
+    if NEW_STOCK_ARTICLES_PATH.exists():
+        try:
+            with open(NEW_STOCK_ARTICLES_PATH, encoding="utf-8") as f:
+                parsed = _normalize_new_stock_articles(json.load(f))
+            if parsed:
+                logger.info("NEW_STOCK_ARTICLES from file: %s items", len(parsed))
+                return parsed
+        except Exception as e:
+            logger.warning("new_stock_articles.json load error: %s", e)
+    return list(_DEFAULT_NEW_STOCK_ARTICLES)
+
+
+NEW_STOCK_ARTICLES = _load_new_stock_articles()
 _geo_dest_cache = {}  # city_id -> {dest, destinations, ts, address}
 _geo_dest_lock = threading.Lock()
 _wh_name_cache = {}  # wh_id -> name
