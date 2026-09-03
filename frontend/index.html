@@ -2061,7 +2061,7 @@ async function runDeliveryCoverage() {
   const root = document.getElementById('dcRoot');
   const btn = document.getElementById('dcRunBtn');
   if(btn) { btn.disabled = true; btn.textContent = 'Обновляем…'; }
-  if(root) root.innerHTML = `<div class="loading"><div class="spinner"></div><span>Обновляем остатки по 9 артикулам × 12 городам…</span></div>`;
+  if(root) root.innerHTML = `<div class="loading"><div class="spinner"></div><span>Обновляем остатки по артикулам × городам…</span></div>`;
   if(info) info.textContent = 'Опрос витрины WB…';
   try {
     const r = await fetch(`${RAILWAY_URL}/api/delivery-coverage`, {
