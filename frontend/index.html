@@ -388,8 +388,8 @@ td.tc{text-align:center}
 .manual-input:focus{outline:none;border-color:var(--wb-purple);background:#fff}
 .save-rating-btn{font-size:11px;padding:3px 8px;background:var(--wb-purple);color:#fff;border:none;border-radius:4px;cursor:pointer;margin-left:4px;font-family:inherit}
 .save-rating-btn:hover{background:var(--wb-purple-dark)}
-.edit-rating-btn{font-size:11px;padding:2px 7px;background:transparent;color:var(--wb-purple);border:1px solid var(--wb-purple);border-radius:4px;cursor:pointer;margin-left:6px;font-family:inherit;opacity:.7}
-.edit-rating-btn:hover{opacity:1}
+.edit-rating-btn{font-size:11px;padding:2px 7px;background:#FFF7ED;color:#C2410C;border:1px solid #FDBA74;border-radius:4px;cursor:pointer;margin-left:6px;font-family:inherit;opacity:1}
+.edit-rating-btn:hover{background:#FFEDD5;border-color:#FB923C}
 .total-label{font-weight:700;color:var(--wb-purple);font-size:12px}
 
 .sbar{display:flex;flex-direction:column;gap:2px;min-width:90px}
@@ -1552,6 +1552,12 @@ function editManualRating(safeArticle) {
   if(a) { a._editing = true; renderProducts(); }
 }
 
+function cancelManualRating(safeArticle) {
+  const article = decodeURIComponent(safeArticle);
+  const a = ALL.find(x => x.article === article);
+  if(a) { a._editing = false; renderProducts(); }
+}
+
 async function saveManualRating(safeArticle, nmId) {
   const article = decodeURIComponent(safeArticle);
   const get = id => parseInt(document.getElementById(id + safeArticle)?.value) || 0;
@@ -2502,23 +2508,26 @@ function starBars(a) {
 }
 
 function artRow(a, bg) {
-  const nd = !a.total && !a.is_manual;
+  const nd = !a.total && !a.is_manual && !a._editing;
   const rat = a.avg_rating;
   const sa = encodeURIComponent(a.article);
   const nm = a.nm_id || '';
 
-  // Ручная оценка — показываем инпуты
-  if(a.is_manual && a._editing) {
+  // Режим ручного редактирования (и WB, и уже manual)
+  if(a._editing) {
     return `<tr style="background:#FFF0E8">
       <td><div class="art">${a.article}</div><div class="nmid">${a.nm_id||'—'}</div></td>
-      <td class="tc" id="rat_${sa}"><span style="color:${rc(rat)}">${parseFloat(rat).toFixed(2)} <span style="font-size:10px;color:var(--wb-muted)">✏️</span></span></td>
+      <td class="tc" id="rat_${sa}"><span style="color:${rat!=null?rc(rat):'var(--wb-faint)'}">${rat!=null?parseFloat(rat).toFixed(2):'—'}</span></td>
       <td class="tr2"><input class="manual-input" id="r5_${sa}" type="number" min="0" placeholder="★5" value="${a.r5||0}"></td>
       <td class="tr2"><input class="manual-input" id="r4_${sa}" type="number" min="0" placeholder="★4" value="${a.r4||0}"></td>
       <td class="tr2"><input class="manual-input" id="r3_${sa}" type="number" min="0" placeholder="★3" value="${a.r3||0}"></td>
       <td class="tr2"><input class="manual-input" id="r2_${sa}" type="number" min="0" placeholder="★2" value="${a.r2||0}"></td>
       <td class="tr2"><input class="manual-input" id="r1_${sa}" type="number" min="0" placeholder="★1" value="${a.r1||0}"></td>
       <td class="tr2" style="color:var(--wb-muted)">${a.total||'—'}</td>
-      <td class="tc"><button class="save-rating-btn" onclick="saveManualRating('${sa}','${nm}')">Сохранить</button></td>
+      <td class="tc" style="white-space:nowrap">
+        <button type="button" class="save-rating-btn" onclick="saveManualRating('${sa}','${nm}')">Сохранить</button>
+        <button type="button" class="edit-rating-btn" onclick="cancelManualRating('${sa}')" title="Отмена" style="margin-left:4px">✕</button>
+      </td>
       <td></td>
     </tr>`;
   }
@@ -2534,7 +2543,7 @@ function artRow(a, bg) {
       <td class="tr2"><input class="manual-input" id="r2_${sa}" type="number" min="0" placeholder="★2"></td>
       <td class="tr2"><input class="manual-input" id="r1_${sa}" type="number" min="0" placeholder="★1"></td>
       <td class="tr2" style="color:var(--wb-muted)">—</td>
-      <td class="tc"><button class="save-rating-btn" onclick="saveManualRating('${sa}','${nm}')">Сохранить</button></td>
+      <td class="tc"><button type="button" class="save-rating-btn" onclick="saveManualRating('${sa}','${nm}')">Сохранить</button></td>
       <td></td>
     </tr>`;
   }
@@ -2543,12 +2552,10 @@ function artRow(a, bg) {
   const exclBadge = (a.excluded||0) > 0
     ? `<span class="excl-badge">↩ ${fmt(a.excluded)}</span>`
     : '<span style="color:var(--wb-faint);font-size:11px">—</span>';
-  const editBtn = a.is_official
-    ? `<button class="edit-rating-btn" onclick="editManualRating('${sa}')" title="Изменить оценку вручную">✏️</button>`
-    : '';
+  const editBtn = `<button type="button" class="edit-rating-btn" onclick="editManualRating('${sa}')" title="Изменить оценку вручную">✏️</button>`;
   const ratingCell = rat
-    ? `<span class="rnum${a.is_official?'-official':''}" style="color:${rc(rat)}">${parseFloat(rat).toFixed(2)}${a.is_official?'<span class="official-tag">WB</span>':''}</span>${editBtn}`
-    : '<span style="color:var(--wb-faint)">—</span>';
+    ? `<span class="rnum${a.is_official?'-official':''}" style="color:${rc(rat)}">${parseFloat(rat).toFixed(2)}${a.is_official?'<span class="official-tag">WB</span>':''}${a.is_manual?'<span class="official-tag" style="background:#FFF3EC;color:#B54708;border-color:#F7B27A">ручн.</span>':''}</span>${editBtn}`
+    : `<span style="color:var(--wb-faint)">—</span>${editBtn}`;
 
   const rowBg = a.is_manual ? '#FFF3EC' : bg;
 
