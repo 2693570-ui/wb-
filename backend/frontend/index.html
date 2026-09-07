@@ -1549,13 +1549,21 @@ async function triggerRatingsApiSync() {
 function editManualRating(safeArticle) {
   const article = decodeURIComponent(safeArticle);
   const a = ALL.find(x => x.article === article);
-  if(a) { a._editing = true; renderProducts(); }
+  if(!a) return;
+  a._editing = true;
+  // Раскрываем склейку, где лежит артикул
+  let inGroup = false;
+  Object.entries(GROUPS).forEach(([g, list]) => {
+    if((list || []).includes(article)) { EXP[g] = true; inGroup = true; }
+  });
+  if(!inGroup) EXP['Без склейки'] = true;
+  render();
 }
 
 function cancelManualRating(safeArticle) {
   const article = decodeURIComponent(safeArticle);
   const a = ALL.find(x => x.article === article);
-  if(a) { a._editing = false; renderProducts(); }
+  if(a) { a._editing = false; render(); }
 }
 
 async function saveManualRating(safeArticle, nmId) {
@@ -2552,7 +2560,7 @@ function artRow(a, bg) {
   const exclBadge = (a.excluded||0) > 0
     ? `<span class="excl-badge">↩ ${fmt(a.excluded)}</span>`
     : '<span style="color:var(--wb-faint);font-size:11px">—</span>';
-  const editBtn = `<button type="button" class="edit-rating-btn" onclick="editManualRating('${sa}')" title="Изменить оценку вручную">✏️</button>`;
+  const editBtn = `<button type="button" class="edit-rating-btn" data-art="${sa}" onclick="editManualRating(this.getAttribute('data-art'))" title="Изменить оценку вручную">✏️</button>`;
   const ratingCell = rat
     ? `<span class="rnum${a.is_official?'-official':''}" style="color:${rc(rat)}">${parseFloat(rat).toFixed(2)}${a.is_official?'<span class="official-tag">WB</span>':''}${a.is_manual?'<span class="official-tag" style="background:#FFF3EC;color:#B54708;border-color:#F7B27A">ручн.</span>':''}</span>${editBtn}`
     : `<span style="color:var(--wb-faint)">—</span>${editBtn}`;
