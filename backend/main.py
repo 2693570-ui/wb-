@@ -7284,12 +7284,12 @@ def fetch_wb_delivery_eta(nm_id: int, dest: int, hide_dtype=None) -> dict:
 
 
 def classify_delivery_eta(hours, qty: int) -> str:
-    """Цвета по клиентскому сроку витрины (product time1+time2): >40жёлтый, >60красный."""
+    """Цвета по клиентскому сроку витрины (product time1+time2): ≥38жёлтый, >60красный."""
     if not qty or hours is None:
         return "none"
     if hours > 60:
         return "bad"
-    if hours > 40:
+    if hours >= 38:
         return "warn"
     return "ok"
 
@@ -7504,9 +7504,9 @@ def delivery_coverage(request: dict = None):
         "articles": NEW_STOCK_ARTICLES,
         "cities": [{"id": c["id"], "name": c["name"], "dest": c.get("dest"), "address": c.get("address"), "error": c.get("error")} for c in city_meta],
         "thresholds": {
-            "warn_hours": 40,
+            "warn_hours": 38,
             "bad_hours": 60,
-            "note": "часы = срок витрины (как у клиента); nearest_* — ближайший склад как в MKeeper; >40ч жёлтый · >60ч красный",
+            "note": "часы = срок витрины (как у клиента); nearest_* — ближайший склад как в MKeeper; ≥38ч жёлтый · >60ч красный",
         },
         "items": rows,
     }
