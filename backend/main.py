@@ -6231,6 +6231,7 @@ _DEFAULT_NEW_STOCK_ARTICLES = [
     {"vendor_code": "24_ZK_GOLD", "nm_id": 1186458378},
     {"vendor_code": "24_ZK_SILVER", "nm_id": 1215098632},
     {"vendor_code": "25_SK_53", "nm_id": 1260345062},
+    {"vendor_code": "27_YS-T5", "nm_id": 1504359303},
 ]
 
 
