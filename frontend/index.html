@@ -316,6 +316,7 @@ td.tc{text-align:center}
 .dc-cell{line-height:1.25;text-align:center}
 .dc-cell .dc-qty{font-size:13px}
 .dc-cell .dc-hrs{font-size:11px;opacity:.9}
+.dc-cell .dc-when{font-size:10px;font-weight:500;opacity:.85;margin-top:1px}
 .dc-ship{font-size:11px;color:#B42318;margin-top:4px}
 .ow-model-btn{display:inline-flex;align-items:center;gap:4px;max-width:220px;border:1px solid var(--wb-border);background:#fff;border-radius:6px;padding:4px 8px;font-size:12px;font-family:inherit;color:var(--wb-text);cursor:pointer;text-align:left;line-height:1.3}
 .ow-model-btn:hover{border-color:var(--wb-purple);background:var(--wb-purple-light)}
@@ -2098,6 +2099,21 @@ async function runDeliveryCoverage() {
   }
 }
 
+function buyerDeliveryLabel(hours) {
+  if(hours == null || hours === '' || !isFinite(Number(hours))) return '';
+  const now = new Date();
+  const arrival = new Date(now.getTime() + Number(hours) * 3600 * 1000);
+  const dayKey = d => new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(d);
+  const diff = Math.round((Date.parse(dayKey(arrival) + 'T00:00:00Z') - Date.parse(dayKey(now) + 'T00:00:00Z')) / 86400000);
+  if(diff <= 0) return 'сегодня';
+  if(diff === 1) return 'завтра';
+  if(diff === 2) return 'послезавтра';
+  return new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short' })
+    .format(arrival).replace('.', '');
+}
+
 function renderDeliveryCoverage(data) {
   const root = document.getElementById('dcRoot');
   if(!root) return;
@@ -2119,10 +2135,12 @@ function renderDeliveryCoverage(data) {
       } else {
         const qty = c.qty != null ? c.qty : '—';
         const hrs = c.hours != null ? `${c.hours}ч` : '—';
-        inner = `<div class="dc-qty">${qty} шт</div><div class="dc-hrs">${hrs}</div>`;
+        const when = buyerDeliveryLabel(c.hours);
+        inner = `<div class="dc-qty">${qty} шт</div><div class="dc-hrs">${hrs}</div>${when ? `<div class="dc-when">${escapeHtml(when)}</div>` : ''}`;
       }
       const tipParts = [
         c.city,
+        buyerDeliveryLabel(c.hours),
         c.hours != null ? `клиент ${c.hours}ч` : '',
         c.qty != null ? `${c.qty} шт` : '',
         c.wh_name || (c.wh ? `wh ${c.wh}` : ''),
