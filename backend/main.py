@@ -4788,7 +4788,14 @@ logger.info(f"FRONTEND_DIR={FRONTEND_DIR} exists={FRONTEND_DIR.exists()} index={
 def root():
     index = FRONTEND_DIR / "index.html"
     if index.exists():
-        return FileResponse(index, media_type="text/html; charset=utf-8")
+        return FileResponse(
+            index,
+            media_type="text/html; charset=utf-8",
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+            },
+        )
     tried = [str(p) for p in FRONTEND_CANDIDATES]
     return {"status": "ok", "hint": "frontend/index.html not found", "tried": tried}
 
@@ -4796,7 +4803,14 @@ def root():
 def root_index():
     index = FRONTEND_DIR / "index.html"
     if index.exists():
-        return FileResponse(index, media_type="text/html; charset=utf-8")
+        return FileResponse(
+            index,
+            media_type="text/html; charset=utf-8",
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+            },
+        )
     return HTMLResponse("<h1>frontend missing</h1>", status_code=404)
 
 if (FRONTEND_DIR / "index.html").exists():
