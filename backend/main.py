@@ -7218,12 +7218,38 @@ def _parse_wb_card_product(p: dict, nm_id: int, source: str) -> dict:
     }
 
 
+_wb_internal_lock = threading.Lock()
+_wb_internal_disabled_until = 0.0
+_http_tls = threading.local()
+
+
+def _wb_http():
+    client = getattr(_http_tls, "client", None)
+    if client is None:
+        client = httpx.Client(
+            timeout=httpx.Timeout(12.0, connect=4.0),
+            follow_redirects=True,
+            limits=httpx.Limits(max_connections=40, max_keepalive_connections=20),
+        )
+        _http_tls.client = client
+    return client
+
+
+def _wb_internal_allowed() -> bool:
+    return bool(WB_SITE_COOKIE) and time.time() >= _wb_internal_disabled_until
+
+
+def _wb_disable_internal(minutes: float = 45.0):
+    global _wb_internal_disabled_until
+    with _wb_internal_lock:
+        _wb_internal_disabled_until = max(_wb_internal_disabled_until, time.time() + minutes * 60)
+
+
 def fetch_wb_delivery_eta(nm_id: int, dest: int, hide_dtype=None) -> dict:
     """Срок доставки и склады: сначала __internal (как MKeeper), иначе card.wb.ru.
 
-    WB_SITE_COOKIE — cookie с wildberries.ru; без неё __internal даёт 403,
-    остаётся урезанный публичный card (часто 1 склад).
-    hide_dtype=1 — запасной фильтр FBS на публичке.
+    WB_SITE_COOKIE — cookie с wildberries.ru; без неё / после 403 __internal
+    пропускается, остаётся публичный card.
     """
     base_headers = {
         "User-Agent": (
@@ -7243,7 +7269,6 @@ def fetch_wb_delivery_eta(nm_id: int, dest: int, hide_dtype=None) -> dict:
         "nm": nm_id,
         "lang": "ru",
         "ab_testing": "false",
-        # Параметры с витрины WB — полный список stocks (HAR / MKeeper).
         "hide_vflags": 4294967296,
         "mtype": 257,
     }
@@ -7251,7 +7276,7 @@ def fetch_wb_delivery_eta(nm_id: int, dest: int, hide_dtype=None) -> dict:
         params["hide_dtype"] = hide_dtype
 
     endpoints = []
-    if WB_SITE_COOKIE:
+    if _wb_internal_allowed():
         endpoints.append((
             "internal",
             "https://www.wildberries.ru/__internal/card/cards/v4/detail",
@@ -7270,18 +7295,19 @@ def fetch_wb_delivery_eta(nm_id: int, dest: int, hide_dtype=None) -> dict:
 
     last_err = None
     try:
+        client = _wb_http()
         for source, url, headers in endpoints:
             try:
-                with httpx.Client(timeout=20, headers=headers, follow_redirects=True) as client:
-                    resp = client.get(url, params=params)
+                resp = client.get(url, params=params, headers=headers)
             except Exception as e:
                 last_err = str(e)[:160]
                 continue
             if not resp.is_success:
                 last_err = f"{source} http {resp.status_code}"
                 if source == "internal" and resp.status_code in (401, 403):
+                    _wb_disable_internal()
                     logger.warning(
-                        "WB __internal card auth failed (%s) — check WB_SITE_COOKIE",
+                        "WB __internal card auth failed (%s) — skipping until cookie refresh",
                         resp.status_code,
                     )
                 continue
@@ -7477,7 +7503,7 @@ def delivery_coverage(request: dict = None):
     # 2) ETA nm × city (параллельно)
     rows = []
     jobs = []
-    with ThreadPoolExecutor(max_workers=10) as pool:
+    with ThreadPoolExecutor(max_workers=20) as pool:
         for nm_id in nm_ids:
             for c in city_meta:
                 jobs.append((nm_id, c, pool.submit(_cell_for, nm_id, c)))
@@ -7516,7 +7542,8 @@ def delivery_coverage(request: dict = None):
     return {
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "site_cookie": bool(WB_SITE_COOKIE),
-        "card_mode": "internal" if WB_SITE_COOKIE else "public",
+        "card_mode": "internal" if _wb_internal_allowed() else "public",
+        "internal_cookie_ok": _wb_internal_allowed(),
         "articles": NEW_STOCK_ARTICLES,
         "cities": [{"id": c["id"], "name": c["name"], "dest": c.get("dest"), "address": c.get("address"), "error": c.get("error")} for c in city_meta],
         "thresholds": {

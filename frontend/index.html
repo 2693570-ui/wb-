@@ -2076,14 +2076,21 @@ async function runDeliveryCoverage() {
   const root = document.getElementById('dcRoot');
   const btn = document.getElementById('dcRunBtn');
   if(btn) { btn.disabled = true; btn.textContent = 'Обновляем…'; }
-  if(root) root.innerHTML = `<div class="loading"><div class="spinner"></div><span>Обновляем остатки по артикулам × городам…</span></div>`;
-  if(info) info.textContent = 'Опрос витрины WB…';
+  const keep = root && DC_LAST && root.querySelector('table.matrix');
+  if(!keep && root) {
+    root.innerHTML = `<div class="loading"><div class="spinner"></div><span>Опрашиваем витрину WB… обычно 20–40 сек</span></div>`;
+  }
+  if(info) info.textContent = 'Опрос витрины WB… обычно 20–40 сек';
   try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 180000);
     const r = await fetch(`${RAILWAY_URL}/api/delivery-coverage`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({})
+      body: JSON.stringify({}),
+      signal: ctrl.signal
     });
+    clearTimeout(timer);
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
     DC_LAST = d;
@@ -2092,8 +2099,9 @@ async function runDeliveryCoverage() {
     const when = d.updated_at ? new Date(d.updated_at).toLocaleString('ru-RU') : 'сейчас';
     if(info) info.textContent = `Обновлено ${when} · зелёный — завтра · жёлтый — послезавтра · красный — остальные`;
   } catch(e) {
-    if(root) root.innerHTML = `<div class="empty" style="padding:40px 20px">Ошибка: ${escapeHtml(e.message||String(e))}</div>`;
-    if(info) info.textContent = 'Ошибка запроса';
+    const msg = e.name === 'AbortError' ? 'таймаут — попробуй ещё раз' : (e.message||String(e));
+    if(info) info.textContent = 'Ошибка: ' + msg;
+    if(!keep && root) root.innerHTML = `<div class="empty" style="padding:40px 20px">Ошибка: ${escapeHtml(msg)}</div>`;
   } finally {
     if(btn) { btn.disabled = false; btn.textContent = '↻ Обновить'; }
   }
