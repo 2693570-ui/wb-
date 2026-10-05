@@ -27,6 +27,12 @@ try:
 except Exception as _studio_imp_err:
     logger.warning(f"studio router not loaded: {_studio_imp_err}")
 
+try:
+    from studio_ctr import router as studio_ctr_router
+    app.include_router(studio_ctr_router)
+except Exception as _studio_ctr_err:
+    logger.warning(f"studio ctr router not loaded: {_studio_ctr_err}")
+
 WB_TOKEN = os.getenv("WB_TOKEN", "")
 # Cookie-строка с www.wildberries.ru (как в DevTools → Request Headers → cookie).
 # Нужна для __internal/card/.../detail — полный список складов как в MKeeper.

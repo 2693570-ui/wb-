@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vi-Smart Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F5F3F0;--surface:#fff;--border:#E2DDD8;--text:#1A1816;--muted:#6B6560;
+  --accent:#D4622A;--accent-d:#4A4540;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.top{height:52px;background:#4A4540;display:flex;align-items:center;padding:0 20px;gap:8px;border-bottom:3px solid var(--accent)}
+.top b{color:#fff;font-size:13px;letter-spacing:.4px}
+.top nav{display:flex;height:100%;margin-left:24px}
+.top nav a{color:rgba(255,255,255,.75);padding:0 14px;display:flex;align-items:center;font-size:13px;text-decoration:none;cursor:pointer;border-bottom:2px solid transparent}
+.top nav a.on{color:#fff;border-bottom-color:#fff}
+.top .who{margin-left:auto;color:rgba(255,255,255,.7);font-size:12px}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px}
+h1{font-size:22px;font-weight:600;margin-bottom:6px}
+.lead{font-size:14px;color:var(--muted);line-height:1.5;margin-bottom:22px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px}
+label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin:10px 0 6px}
+input,textarea,select{width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font:13px Inter;background:#fff}
+textarea{min-height:90px;resize:vertical}
+.btn{border:1px solid var(--border);background:#fff;border-radius:6px;padding:8px 14px;font:12px Inter;cursor:pointer}
+.btn.p{background:var(--accent);color:#fff;border-color:var(--accent)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.row>*{flex:1;min-width:160px}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:14px}
+.grid img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:8px;background:#eee;display:block}
+.page{display:none}.page.on{display:block}
+.login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.login .box{width:360px;background:#fff;border:1px solid var(--border);border-radius:14px;padding:28px}
+.status{font-size:12px;color:var(--muted);margin-top:10px}
+.ref{border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;font-size:13px}
+.hide{display:none}
+.table{width:100%;border-collapse:collapse;font-size:13px}
+.table th{text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px;padding:8px 6px;border-bottom:1px solid var(--border)}
+.table td{padding:8px 6px;border-bottom:1px solid var(--border);vertical-align:middle}
+.table tr.sel td{background:#F8F4F0}
+.badge{display:inline-block;font-size:11px;padding:2px 7px;border-radius:99px;background:#EFEBE6;color:var(--muted)}
+.badge.ok{background:#E5F2EA;color:#246B45}
+.badge.bad{background:#FDE8DF;color:#A33B12}
+.badge.warn{background:#F8F1D8;color:#7A5B10}
+.pills{display:flex;gap:6px}
+.pills button.on{background:var(--accent-d);color:#fff;border-color:var(--accent-d)}
+</style>
+</head>
+<body>
+<div id="gate" class="login">
+  <div class="box">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Vi-Smart</div>
+    <h1>Studio</h1>
+    <p class="lead">Выдача WB, эталоны CTR и сбор слайдов. Вход для Владислава и менеджеров.</p>
+    <label>Логин</label>
+    <select id="loginName">
+      <option value="vladislav">Владислав</option>
+      <option value="wb">Менеджер WB</option>
+      <option value="ozon">Менеджер Ozon</option>
+    </select>
+    <label>Пароль</label>
+    <input id="loginPass" type="password" onkeydown="if(event.key==='Enter') doLogin()">
+    <div style="margin-top:16px"><button class="btn p" onclick="doLogin()">Войти</button></div>
+    <div class="status" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="app" class="hide">
+  <div class="top">
+    <b>Vi-Smart Studio</b>
+    <nav>
+      <a class="on" data-p="ctr" onclick="go('ctr')">CTR</a>
+      <a data-p="serp" onclick="go('serp')">Выдача 1–50</a>
+      <a data-p="refs" onclick="go('refs')">Эталоны</a>
+      <a data-p="new" onclick="go('new')">Новый товар</a>
+    </nav>
+    <span class="who" id="who"></span>
+  </div>
+  <div class="wrap">
+    <div class="page on" id="p-ctr">
+      <h1>CTR против полок</h1>
+      <p class="lead">Сравнение из дашборда. В зачёт идёт конкурент с заказами, из топ-50 по боевым ключам, который стоит у вас в «Смотрите также» или у которого стоите вы. Меньше 5&nbsp;000 показов — мало данных, в победу не считается.</p>
+      <div class="card">
+        <div class="row">
+          <div>
+            <label>Период</label>
+            <div class="pills">
+              <button class="btn on" id="d7" onclick="setCtrDays(7)">7 дней</button>
+              <button class="btn" id="d14" onclick="setCtrDays(14)">14 дней</button>
+              <button class="btn" id="d30" onclick="setCtrDays(30)">30 дней</button>
+            </div>
+          </div>
+          <div style="flex:0"><label>&nbsp;</label><button class="btn" id="adsBtn" onclick="loadAds()">Рекламный CTR</button></div>
+        </div>
+        <div class="status" id="ctrSt">Загружаю сравнения…</div>
+      </div>
+      <div id="ctrOwn" style="margin-top:16px"></div>
+      <div id="ctrDetail" style="margin-top:16px"></div>
+    </div>
+
+    <div class="page" id="p-serp">
+      <h1>Разбор выдачи</h1>
+      <p class="lead">Места 1–50 как у покупателя. CTR/CR — из отчётов «Сравнение карточек» на дашборде. На выходе — один главный слайд, который должен выигрывать клик.</p>
+      <div class="card">
+        <div class="row">
+          <div><label>Ключ</label><input id="q" value="смарт часы мужские" list="qlist"></div>
+          <datalist id="qlist"></datalist>
+          <div style="flex:0"><label>&nbsp;</label><button class="btn p" id="runBtn" onclick="runSerp()">Сделать главный слайд</button></div>
+        </div>
+        <div class="status" id="serpSt">WB · Москва · топ-50</div>
+      </div>
+      <div id="winner" style="margin-top:16px"></div>
+      <div id="mosaic" class="grid"></div>
+    </div>
+
+    <div class="page" id="p-refs">
+      <h1>Эталоны</h1>
+      <p class="lead">Карточки с сильным CTR. Сюда кладём то, на чём учимся: ссылка WB, цифры, почему слайд работает. Пришли сетку ТЗ — зашьём структуру 7–10 слайдов.</p>
+      <div class="card" style="margin-bottom:16px">
+        <div class="row">
+          <div><label>Артикул WB</label><input id="rNm" inputmode="numeric"></div>
+          <div><label>CTR %</label><input id="rCtr"></div>
+          <div><label>CR %</label><input id="rCr"></div>
+        </div>
+        <label>Почему работает</label>
+        <textarea id="rWhy" placeholder="Тёмный фон на белой выдаче, часы на руке, одно УТП…"></textarea>
+        <div style="margin-top:12px"><button class="btn p" onclick="saveRef()">Сохранить эталон</button></div>
+        <div class="status" id="refSt"></div>
+      </div>
+      <div id="refList"></div>
+    </div>
+
+    <div class="page" id="p-new">
+      <h1>Новый товар</h1>
+      <p class="lead">Кидаешь предметку, руку, комплект, макро и сильные стороны. Я разбираю выдачу по ключу и предлагаю главный слайд. Галерея 7–10 кадров включится после твоей сетки-ТЗ.</p>
+      <div class="card">
+        <label>Модель / артикул продавца</label>
+        <input id="pTitle" placeholder="Например Ultra Mini чёрные">
+        <label>Ключ выдачи</label>
+        <input id="pKey" placeholder="смарт часы мужские">
+        <label>Сильные стороны</label>
+        <textarea id="pStr" placeholder="AMOLED, 7 дней, звонки, IP68, ремешок в комплекте…"></textarea>
+        <label>Фото (белый / рука / комплект / макро) — пока на диске, в чат можно дублировать</label>
+        <input type="file" id="pFiles" accept="image/*" multiple>
+        <div class="row" style="margin-top:14px">
+          <button class="btn p" onclick="saveProject()">Сохранить бриф модели</button>
+          <button class="btn" onclick="go('serp')">Разбор выдачи по ключу</button>
+        </div>
+        <div class="status" id="projSt"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const API = '';
+let TOKEN = localStorage.getItem('studio_token') || '';
+
+function headers(json) {
+  const h = TOKEN ? {'X-Studio-Token': TOKEN} : {};
+  if(json) h['Content-Type'] = 'application/json';
+  return h;
+}
+
+async function doLogin() {
+  const err = document.getElementById('loginErr');
+  err.textContent = '';
+  try {
+    const r = await fetch(API + '/api/studio/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        login: document.getElementById('loginName').value,
+        password: document.getElementById('loginPass').value
+      })
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || 'Ошибка входа');
+    TOKEN = d.token;
+    localStorage.setItem('studio_token', TOKEN);
+    showApp(d.user);
+  } catch(e) { err.textContent = e.message; }
+}
+
+async function boot() {
+  if(!TOKEN) return;
+  try {
+    const r = await fetch(API + '/api/studio/me', {headers: headers()});
+    if(!r.ok) { TOKEN=''; localStorage.removeItem('studio_token'); return; }
+    const d = await r.json();
+    showApp(d.user);
+  } catch(e) {}
+}
+
+function showApp(user) {
+  document.getElementById('gate').classList.add('hide');
+  document.getElementById('app').classList.remove('hide');
+  document.getElementById('who').textContent = (user && user.name) || '';
+  loadKeys();
+  loadRefs();
+  loadCtr();
+}
+
+function go(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.top nav a').forEach(a => a.classList.toggle('on', a.dataset.p===id));
+  document.getElementById('p-'+id).classList.add('on');
+  if(id==='serp' && document.getElementById('pKey').value)
+    document.getElementById('q').value = document.getElementById('pKey').value;
+}
+
+async function loadKeys() {
+  try {
+    const r = await fetch(API + '/api/search-keywords');
+    const d = await r.json();
+    const dl = document.getElementById('qlist');
+    dl.innerHTML = (d.keywords||[]).map(k => `<option value="${(k.query||'').replace(/"/g,'')}">`).join('');
+  } catch(e) {}
+}
+
+async function runSerp() {
+  const q = document.getElementById('q').value.trim();
+  const st = document.getElementById('serpSt');
+  const btn = document.getElementById('runBtn');
+  if(!q) { st.textContent = 'Нужен ключ'; return; }
+  btn.disabled = true;
+  st.textContent = 'Снимаю места 1–50… 15–25 сек';
+  try {
+    const r = await fetch(API + '/api/visual/serp', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({query:q, dest:-1257786, limit:50, force:true})
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || d.error || r.status);
+    const w = (d.brief && d.brief.winner) || {};
+    const beats = (w.why_beats || d.brief && d.brief.holes || []).map(x => `<li>${esc(x)}</li>`).join('');
+    document.getElementById('winner').innerHTML = `<div class="card">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Слайд против топ-50 · CTR совпало ${(d.funnel&&d.funnel.matched)||0} из ${(d.items||[]).length}</div>
+      <div style="font-size:16px;font-weight:600;margin-bottom:8px">${esc(w.title||'Главный слайд')} · ${esc(w.headline||'')}</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:8px">${esc(w.composition||'')}</div>
+      <ul style="padding-left:18px;font-size:13px;line-height:1.45;color:var(--muted)">${beats}</ul>
+    </div>`;
+    document.getElementById('mosaic').innerHTML = (d.items||[]).slice(0,50).map(it =>
+      `<a href="${esc(it.url||'#')}" target="_blank" rel="noopener"><img src="${esc(it.thumb||'')}" alt=""></a>`
+    ).join('');
+    st.textContent = 'Готово · ' + ((d.items||[]).length) + ' мест';
+  } catch(e) { st.textContent = e.message; }
+  finally { btn.disabled = false; }
+}
+
+function esc(s){ return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+let CTR_DAYS = 7;
+let CTR_BOARD = null;
+let CTR_NM = null;
+let CTR_SHOW_EMPTY = false;
+
+function setCtrDays(days) {
+  CTR_DAYS = days;
+  [7,14,30].forEach(d => document.getElementById('d'+d).classList.toggle('on', d===days));
+  loadCtr();
+}
+
+function ctrPct(v){ return v==null || v==='' ? '—' : (Math.round(Number(v)*100)/100).toFixed(2)+'%'; }
+
+function ctrBadge(card){
+  if(!card || card.status==='нет в сравнении') return '<span class="badge">нет в сравнении</span>';
+  if(card.low_data) return '<span class="badge warn">мало данных</span>';
+  return '<span class="badge ok">можно сравнивать</span>';
+}
+
+async function loadCtr(){
+  const st = document.getElementById('ctrSt');
+  st.textContent = 'Собираю файлы сравнения…';
+  try {
+    const r = await fetch(API + '/api/studio/ctr-board?days='+CTR_DAYS, {headers: headers()});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || 'Ошибка');
+    CTR_BOARD = d;
+    const files = (d.sessions||[]).map(s => s.period_begin+' — '+s.period_end).join(', ');
+    st.textContent = files
+      ? `Файлы: ${files}. Своих карточек в сравнении: ${d.compared_count} из ${d.own_count}. Порог ${d.min_views} показов.`
+      : 'В этом окне нет файлов «Сравнение карточек». Загрузите их на дашборде.';
+    renderCtrOwn();
+    document.getElementById('ctrDetail').innerHTML = '';
+    CTR_NM = null;
+  } catch(e) { st.textContent = e.message; }
+}
+
+function renderCtrOwn(){
+  const own = (CTR_BOARD && CTR_BOARD.own) || [];
+  const ready = own.filter(c => c.views>0 || c.ctr!=null);
+  const empty = own.filter(c => !(c.views>0 || c.ctr!=null));
+  const rows = CTR_SHOW_EMPTY ? own : ready;
+  const body = rows.map(c => `<tr class="${CTR_NM===c.nm_id?'sel':''}" style="cursor:pointer" onclick="openCard(${c.nm_id})">
+      <td><b>${esc(c.vendor_code||c.nm_id)}</b><div style="color:var(--muted);font-size:11px">${c.nm_id}</div></td>
+      <td>${esc(c.brand||'')}</td>
+      <td>${ctrPct(c.ctr)}</td>
+      <td>${c.ad_ctr!=null?ctrPct(c.ad_ctr):'—'}</td>
+      <td>${c.org_ctr!=null?ctrPct(c.org_ctr):(c.org_note?esc(c.org_note):'—')}</td>
+      <td>${(c.views||0).toLocaleString('ru-RU')}</td>
+      <td>${(c.orders||0).toLocaleString('ru-RU')}</td>
+      <td>${ctrBadge(c)}</td>
+    </tr>`).join('');
+  document.getElementById('ctrOwn').innerHTML = `<div class="card" style="overflow:auto">
+    <table class="table">
+      <thead><tr><th>Артикул</th><th>Бренд</th><th>CTR</th><th>Реклама</th><th>Органика</th><th>Показы</th><th>Заказы</th><th></th></tr></thead>
+      <tbody>${body || '<tr><td colspan="8">В файлах этого окна своих карточек нет. Добавьте свой nmID в сравнение на WB и загрузите файл на дашборд.</td></tr>'}</tbody>
+    </table>
+    ${empty.length && !CTR_SHOW_EMPTY ? `<div style="margin-top:10px"><button class="btn" onclick="CTR_SHOW_EMPTY=true;renderCtrOwn()">Ещё ${empty.length} без сравнения</button></div>` : ''}
+  </div>`;
+}
+
+function openCard(nm){
+  CTR_NM = nm;
+  renderCtrOwn();
+  const card = ((CTR_BOARD&&CTR_BOARD.own)||[]).find(c => c.nm_id===nm);
+  document.getElementById('ctrDetail').innerHTML = `<div class="card">
+    <div style="font-size:16px;font-weight:600;margin-bottom:6px">${esc((card&&card.vendor_code)||nm)} · общий CTR ${ctrPct(card&&card.ctr)}</div>
+    <div class="status" style="margin-bottom:10px">${ctrBadge(card)} Показы ${((card&&card.views)||0).toLocaleString('ru-RU')}. Зачёт: полка + топ-50 + заказы у конкурента.</div>
+    <label>Сравнить ещё с nmID через запятую</label>
+    <input id="manualNm" placeholder="12345678, 87654321">
+    <div style="margin-top:12px"><button class="btn p" id="qualBtn" onclick="qualifyCard()">Проверить полки и топ-50</button></div>
+    <div class="status" id="qualSt">8 ключей, Москва. Первый проход 30–90 секунд, повтор в течение 6 часов быстрее.</div>
+    <div id="qualOut"></div>
+  </div>`;
+}
+
+async function qualifyCard(){
+  const st = document.getElementById('qualSt');
+  const btn = document.getElementById('qualBtn');
+  btn.disabled = true;
+  st.textContent = 'Снимаю топ-50 и полки…';
+  try {
+    const r = await fetch(API + '/api/studio/ctr-qualify', {
+      method:'POST', headers: headers(true),
+      body: JSON.stringify({
+        days: CTR_DAYS,
+        nm_id: CTR_NM,
+        manual_text: document.getElementById('manualNm').value
+      })
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || 'Ошибка');
+    renderQualify(d);
+  } catch(e) { st.textContent = e.message; }
+  finally { btn.disabled = false; }
+}
+
+function renderQualify(d){
+  const s = d.summary || {};
+  const pos = (d.our_positions||[]).map(p => `${p.query}: ${p.position}`).join(' · ');
+  const head = s.own_reliable
+    ? `Выше ${s.above} · ниже ${s.below} · мало данных ${s.low_data} · в зачёте ${s.scored}`
+    : `Наша карточка ниже 5 000 показов — итог «выше / ниже» не ставим. В зачёте ${s.scored}.`;
+  const qErr = (d.queries||[]).filter(q => q.error).map(q => q.query).join(', ');
+  document.getElementById('qualSt').textContent = head + (s.shelf_error ? ' Полка: '+s.shelf_error : '');
+  const rivals = d.rivals || [];
+  const body = rivals.map(c => {
+    const where = [
+      c.on_my_shelf ? 'у нас на полке' : '',
+      c.i_on_their_shelf ? 'мы у него на полке' : '',
+      c.manual ? 'вручную' : ''
+    ].filter(Boolean).join(', ');
+    const keys = (c.top50||[]).map(p => `${p.query} №${p.position}`).join('; ');
+    const cls = c.verdict==='выше' ? 'ok' : (c.verdict==='ниже' ? 'bad' : 'warn');
+    return `<tr>
+      <td><a href="${esc(c.url)}" target="_blank" rel="noopener">${c.nm_id}</a><div style="color:var(--muted);font-size:11px">${esc(c.brand||'')} ${esc(c.name||'')}</div></td>
+      <td>${ctrPct(c.ctr)}</td>
+      <td>${(c.views||0).toLocaleString('ru-RU')}</td>
+      <td>${(c.orders||0).toLocaleString('ru-RU')}</td>
+      <td><span class="badge ${cls}">${esc(c.verdict)}</span></td>
+      <td style="font-size:12px;color:var(--muted)">${esc(where)}<div>${esc(keys)}</div></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('qualOut').innerHTML = `
+    <div class="status" style="margin-top:8px">${pos ? 'Мы в выдаче: '+esc(pos) : 'В топ-50 по этим ключам нашей карточки нет.'}${qErr ? ' Не снялись ключи: '+esc(qErr) : ''}</div>
+    <table class="table" style="margin-top:8px">
+      <thead><tr><th>Конкурент</th><th>CTR</th><th>Показы</th><th>Заказы</th><th>Итог</th><th>Почему в списке</th></tr></thead>
+      <tbody>${body || '<tr><td colspan="6">В зачёте никого нет: нет пересечения полки, топ-50 и заказов из файлов сравнения.</td></tr>'}</tbody>
+    </table>`;
+}
+
+async function loadAds(){
+  const st = document.getElementById('ctrSt');
+  const btn = document.getElementById('adsBtn');
+  btn.disabled = true;
+  st.textContent = 'Считаю рекламу кабинета за те же дни… это может занять до минуты.';
+  try {
+    const r = await fetch(API + '/api/studio/ctr-ads', {
+      method:'POST', headers: headers(true),
+      body: JSON.stringify({days: CTR_DAYS})
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || 'Ошибка');
+    if(CTR_BOARD) CTR_BOARD.own = d.own || [];
+    st.textContent = `Реклама подтянута по ${d.with_ads} карточкам. Органика = показы сравнения минус показы рекламы.`;
+    renderCtrOwn();
+  } catch(e) { st.textContent = e.message; }
+  finally { btn.disabled = false; }
+}
+
+async function loadRefs() {
+  try {
+    const r = await fetch(API + '/api/studio/references', {headers: headers()});
+    const list = r.ok ? await r.json() : [];
+    document.getElementById('refList').innerHTML = list.length
+      ? list.map(x => `<div class="ref"><b>${esc(x.title||x.nm_id||'эталон')}</b>
+          ${x.ctr!=null?' · CTR '+x.ctr+'%':''}${x.cr!=null?' · CR '+x.cr+'%':''}<br>
+          <span style="color:var(--muted)">${esc(x.why_works||'')}</span></div>`).join('')
+      : '<div class="status">Эталонов пока нет — пришли карточки с хорошим CTR, занесём сюда.</div>';
+  } catch(e) {}
+}
+
+async function saveRef() {
+  const st = document.getElementById('refSt');
+  try {
+    const nm = document.getElementById('rNm').value.trim();
+    const r = await fetch(API + '/api/studio/references', {
+      method:'POST', headers: headers(true),
+      body: JSON.stringify({
+        nm_id: nm, title: nm ? ('WB '+nm) : '',
+        url: nm ? 'https://www.wildberries.ru/catalog/'+nm+'/detail.aspx' : '',
+        ctr: numOrNull(document.getElementById('rCtr').value),
+        cr: numOrNull(document.getElementById('rCr').value),
+        why_works: document.getElementById('rWhy').value
+      })
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || 'ошибка');
+    st.textContent = 'Сохранено';
+    loadRefs();
+  } catch(e) { st.textContent = e.message; }
+}
+
+function numOrNull(v){ v=String(v||'').replace(',','.'); const n=parseFloat(v); return isFinite(n)?n:null; }
+
+async function saveProject() {
+  const st = document.getElementById('projSt');
+  try {
+    const r = await fetch(API + '/api/studio/projects', {
+      method:'POST', headers: headers(true),
+      body: JSON.stringify({
+        title: document.getElementById('pTitle').value,
+        keyword: document.getElementById('pKey').value,
+        strengths: document.getElementById('pStr').value
+      })
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || 'ошибка');
+    st.textContent = 'Бриф модели сохранён. Дальше — разбор выдачи и, когда будет ТЗ, сетка слайдов.';
+  } catch(e) { st.textContent = e.message; }
+}
+
+boot();
+</script>
+</body>
+</html>
