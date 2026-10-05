@@ -51,9 +51,14 @@ def studio_user_from_request(request: Request) -> dict | None:
     if not url:
         return None
     try:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         r = httpx.get(
-            f"{url}/rest/v1/studio_sessions?token=eq.{token}&expires_at=gte.{now}&select=login,name,role,expires_at",
+            f"{url}/rest/v1/studio_sessions",
+            params={
+                "token": f"eq.{token}",
+                "expires_at": f"gte.{now}",
+                "select": "login,name,role,expires_at",
+            },
             headers=headers,
             timeout=10,
         )
