@@ -491,31 +491,48 @@ def color_families(text: str) -> set:
 
 
 def _vendor_color(vendor: str) -> str:
-    u = (vendor or "").upper()
-    if "GOLD" in u or "ЗОЛОТ" in u:
+    u = _norm(vendor)
+    if "gold" in u or "золот" in u:
         return "золотой"
-    if "SILVER" in u or "СЕРЕБ" in u:
+    if "silver" in u or "серебр" in u:
         return "серебристый"
-    if "BLACK" in u or "ЧЕРН" in u:
-        return "черный"
-    if "PINK" in u or "РОЗОВ" in u:
+    if "pink" in u or "розов" in u:
         return "розовый"
-    if "WHITE" in u or "БЕЛ" in u:
+    if "black" in u or "черн" in u:
+        return "черный"
+    if "white" in u or ("бел" in u and "беж" not in u):
         return "белый"
+    if "беж" in u:
+        return "бежевый"
+    if "сер" in u:
+        return "серый"
     return ""
 
 
-def classify_shape(name: str, gender: str = "", form: str = "", vendor: str = "", trust_line: bool = False) -> str:
+def classify_shape(
+    name: str,
+    gender: str = "",
+    form: str = "",
+    vendor: str = "",
+    description: str = "",
+    trust_line: bool = False,
+) -> str:
     """Прямоугольные, круглые женские или круглые мужские. Пусто, если не разобрать."""
-    blob = _norm(" ".join(part for part in (name, form, vendor if trust_line else "") if part))
+    blob = _norm(" ".join(
+        part for part in (name, form, description, vendor if trust_line else "") if part
+    ))
     g = _norm(gender)
-    women = "жен" in g or "женск" in blob
-    men = "муж" in g or "мужск" in blob
+    women = "жен" in g or "женск" in blob or "женщин" in blob
+    men = "муж" in g or "мужск" in blob or "мужчин" in blob
     rectangular = "прямоуг" in blob or "квадрат" in blob
     form_l = _norm(form)
     roundish = "кругл" in blob or ("круг" in form_l and "вокруг" not in form_l)
     if trust_line and "zk" in _norm(vendor):
         roundish = True
+    if trust_line and not roundish and any(
+        word in blob for word in ("ultra", "ультра", "мини", "mini", "x10", "hw-w", "apple")
+    ):
+        rectangular = True
     if rectangular and not roundish:
         return "прямоугольные"
     if roundish and not rectangular:
@@ -550,6 +567,8 @@ def _option_texts(data: dict) -> dict:
         if not value:
             continue
         if "цвет" in label:
+            if opt.get("is_variable") or ";" in value:
+                continue
             buckets["color"].append(value)
         elif label == "пол" or label.startswith("пол "):
             buckets["gender"].append(value)
@@ -557,6 +576,8 @@ def _option_texts(data: dict) -> dict:
             buckets["form"].append(value)
     title = data.get("imt_name") or data.get("subj_name") or data.get("name") or ""
     buckets["name"] = str(title or "")
+    buckets["description"] = str(data.get("description") or "")
+    buckets["vendor"] = str(data.get("vendor_code") or "")
     return buckets
 
 
@@ -713,25 +734,118 @@ def _content_face(nm_id: int) -> dict:
     return {}
 
 
+def _product_colors(product: dict) -> list:
+    colors = []
+    for color in product.get("colors") or []:
+        if isinstance(color, dict) and color.get("name"):
+            colors.append(str(color["name"]))
+        elif isinstance(color, str) and color.strip():
+            colors.append(color.strip())
+    return colors
+
+
+def _search_rows(query: str, limit: int = 50) -> dict:
+    """Выдача WB с ценой для клиента и цветом варианта."""
+    app_main = _main()
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+        ),
+        "Accept": "*/*",
+        "Accept-Language": "ru-RU,ru;q=0.9",
+        "Origin": "https://www.wildberries.ru",
+        "Referer": "https://www.wildberries.ru/",
+    }
+    last_err = None
+    for attempt in range(4):
+        try:
+            app_main._wb_search_throttle(0.35 if attempt == 0 else 0.8)
+            resp = httpx.get(
+                app_main._wb_search_next_host(),
+                headers=headers,
+                params={
+                    "appType": 1,
+                    "curr": "rub",
+                    "dest": DEST_MOSCOW,
+                    "query": query,
+                    "resultset": "catalog",
+                    "sort": "popular",
+                    "spp": 30,
+                    "page": 1,
+                },
+                timeout=25,
+            )
+        except Exception as e:
+            last_err = str(e)[:120]
+            continue
+        if resp.status_code == 429:
+            last_err = "429"
+            continue
+        if not resp.is_success:
+            last_err = f"http {resp.status_code}"
+            continue
+        try:
+            data = resp.json()
+        except Exception as e:
+            last_err = f"json {e}"
+            continue
+        products = data.get("products") or (data.get("data") or {}).get("products") or []
+        rows = []
+        for i, product in enumerate(products):
+            if not isinstance(product, dict):
+                continue
+            info = app_main._parse_client_product(product)
+            nm = info.get("nm_id")
+            if not nm:
+                continue
+            rows.append({
+                "position": i + 1,
+                "nm_id": int(nm),
+                "brand": product.get("brand") or "",
+                "name": info.get("name") or product.get("name") or "",
+                "price": info.get("client_price"),
+                "colors": _product_colors(product),
+                "thumb": app_main.wb_product_img_url(int(nm), "c246x328"),
+                "url": f"https://www.wildberries.ru/catalog/{nm}/detail.aspx",
+            })
+            if len(rows) >= limit:
+                break
+        return {"products": rows, "error": None}
+    return {"products": [], "error": last_err}
+
+
+def _single_color(*texts: str) -> str:
+    found = set()
+    for text in texts:
+        found |= color_families(text or "")
+    if len(found) == 1:
+        return next(iter(found))
+    return ""
+
+
 def _profile_own(nm_id: int, vendor: str, board_name: str) -> dict:
     face = _fetch_card_json(nm_id)
     opts = _option_texts(face)
     content = _content_face(nm_id)
     content_texts = content.get("texts") or {}
-    store = _storefront_products([nm_id]).get(nm_id) or {}
+    found = _search_rows(str(nm_id), limit=8)
+    store = next((row for row in found.get("products") or [] if row["nm_id"] == nm_id), {})
     name = opts.get("name") or content.get("name") or store.get("name") or board_name or ""
-    vendor = content.get("vendor") or vendor or ""
-    color_text = " ".join(
-        (opts.get("color") or [])
-        + (content_texts.get("color") or [])
-        + (store.get("colors") or [])
-    )
-    if not color_families(color_text):
-        color_text = (color_text + " " + _vendor_color(vendor)).strip()
+    vendor = opts.get("vendor") or content.get("vendor") or vendor or ""
+    color = _single_color(" ".join(store.get("colors") or []))
+    if not color:
+        color = _vendor_color(vendor)
+    if not color:
+        color = _single_color(" ".join(opts.get("color") or []), " ".join(content_texts.get("color") or []))
+    families = [color] if color else []
     gender = " ".join((opts.get("gender") or []) + (content_texts.get("gender") or []))
     form = " ".join((opts.get("form") or []) + (content_texts.get("form") or []))
-    shape = classify_shape(name, gender, form, vendor, trust_line=True)
-    families = sorted(color_families(color_text))
+    shape = classify_shape(
+        name, gender, form, vendor,
+        description=opts.get("description") or "",
+        trust_line=True,
+    )
     price = store.get("price")
     try:
         price = int(round(float(price))) if price is not None else None
@@ -769,6 +883,7 @@ def _shapes_for(nm_ids: list, names: dict) -> dict:
                 " ".join(part for part in (names.get(nm), opts.get("name")) if part),
                 " ".join(opts.get("gender") or []),
                 " ".join(opts.get("form") or []),
+                description=opts.get("description") or "",
             )
             return nm, shape, " ".join(opts.get("color") or [])
         except Exception as e:
@@ -806,8 +921,7 @@ def compare_with_top(board: dict, nm_id: int) -> dict:
         return {"ok": False, "reason": "Нет цены для клиента на витрине WB.", "own": own, "matches": []}
 
     query = _query_for_shape(own["shape"])
-    app_main = _main()
-    live = app_main.fetch_wb_serp_products(query, DEST_MOSCOW, limit=50)
+    live = _search_rows(query, limit=50)
     products = live.get("products") or []
     if not products:
         return {
@@ -843,29 +957,14 @@ def compare_with_top(board: dict, nm_id: int) -> dict:
             "brand": product.get("brand") or "",
             "name": product.get("name") or "",
             "price": price,
+            "colors_raw": product.get("colors") or [],
             "url": product.get("url") or f"https://www.wildberries.ru/catalog/{nm}/detail.aspx",
             "thumb": product.get("thumb") or "",
         })
 
-    store = _storefront_products([row["nm_id"] for row in priced])
     color_ok = []
     for row in priced:
-        face = store.get(row["nm_id"]) or {}
-        if face.get("price") is not None:
-            try:
-                row["price"] = int(round(float(face["price"])))
-            except (TypeError, ValueError):
-                pass
-        if abs(row["price"] - own["price"]) > PRICE_BAND_RUB:
-            skipped["price"] += 1
-            continue
-        if face.get("name"):
-            row["name"] = face["name"]
-        if face.get("brand"):
-            row["brand"] = face["brand"]
-        color_text = " ".join(face.get("colors") or [])
-        if not color_text:
-            color_text = row["name"]
+        color_text = " ".join(row.get("colors_raw") or []) or row["name"]
         families = color_families(color_text)
         if not (families & own_colors):
             skipped["color"] += 1
