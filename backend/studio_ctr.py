@@ -273,17 +273,133 @@ def _card_public(bucket: dict, vendor_code: str = "", span_days: int = 1, is_own
     return out
 
 
+_MONTHS_RU = (
+    "", "января", "февраля", "марта", "апреля", "мая", "июня",
+    "июля", "августа", "сентября", "октября", "ноября", "декабря",
+)
+
+
+def _overlap_days(a0: date, a1: date, b0: date, b1: date) -> int:
+    start = max(a0, b0)
+    end = min(a1, b1)
+    if end < start:
+        return 0
+    return (end - start).days + 1
+
+
+def _period_label(start: date, end: date) -> str:
+    if start.month == end.month and start.year == end.year:
+        return f"{start.day}–{end.day} {_MONTHS_RU[start.month]} {start.year}"
+    return (
+        f"{start.day} {_MONTHS_RU[start.month]} {start.year} – "
+        f"{end.day} {_MONTHS_RU[end.month]} {end.year}"
+    )
+
+
+def pick_previous_month(sessions: list, today: date | None = None) -> tuple[list, int, str]:
+    """Прошлый календарный месяц. Неделя берётся, если больше половины дней внутри месяца.
+    Файл добавляем, если новых дней больше, чем повторно посчитанных на стыке."""
+    today = today or date.today()
+    month_end = today.replace(day=1) - timedelta(days=1)
+    month_start = month_end.replace(day=1)
+    groups = {}
+    for raw in sessions or []:
+        begin = _parse_date(raw.get("period_begin"))
+        end = _parse_date(raw.get("period_end"))
+        sid = _as_int(raw.get("id"))
+        if begin is None or end is None or sid is None:
+            continue
+        if end < begin:
+            begin, end = end, begin
+        span = (end - begin).days + 1
+        inside = _overlap_days(begin, end, month_start, month_end)
+        if inside == 0 or inside < span - inside:
+            continue
+        key = (begin.isoformat(), end.isoformat())
+        bucket = groups.setdefault(key, {
+            "period_begin": begin.isoformat(),
+            "period_end": end.isoformat(),
+            "begin": begin,
+            "end": end,
+            "ids": [],
+        })
+        bucket["ids"].append(sid)
+    ordered = sorted(groups.values(), key=lambda item: (item["end"], max(item["ids"])), reverse=True)
+    chosen = []
+    for item in ordered:
+        span = (item["end"] - item["begin"]).days + 1
+        overlap = sum(_overlap_days(item["begin"], item["end"], c["begin"], c["end"]) for c in chosen)
+        added = span - overlap
+        if added > overlap:
+            chosen.append(item)
+    covered = set()
+    for item in chosen:
+        day = item["begin"]
+        while day <= item["end"]:
+            if month_start <= day <= month_end:
+                covered.add(day)
+            day += timedelta(days=1)
+    if covered:
+        label = _period_label(min(covered), max(covered))
+        span_days = len(covered)
+    else:
+        label = _period_label(month_start, month_end)
+        span_days = (month_end - month_start).days + 1
+    out = []
+    for item in sorted(chosen, key=lambda row: row["begin"]):
+        out.append({
+            "id": max(item["ids"]),
+            "period_begin": item["period_begin"],
+            "period_end": item["period_end"],
+            "session_ids": sorted(item["ids"]),
+        })
+    return out, span_days, label
+
+
+def _dedupe_week_metrics(rows: list, session_period: dict) -> list:
+    """В одной неделе несколько файлов. Артикул берём один раз, из более поздней загрузки."""
+    best = {}
+    for row in rows or []:
+        sid = _as_int(row.get("session_id"))
+        nm = _as_int(row.get("nm_id"))
+        period = session_period.get(sid)
+        if sid is None or nm is None or not period:
+            continue
+        key = (period, nm)
+        prev = best.get(key)
+        if prev is None or sid > prev[0]:
+            best[key] = (sid, row)
+    return [item[1] for item in best.values()]
+
+
 def load_board(days: int) -> dict:
     sessions = _sb_get("competitor_sessions?select=id,period_begin,period_end,uploaded_at&order=id.desc")
-    chosen = pick_sessions(sessions, days)
+    period_label = ""
+    if days == 30:
+        chosen, span, period_label = pick_previous_month(sessions)
+    else:
+        chosen = pick_sessions(sessions, days)
+        span = covered_days(chosen, days)
     metrics = []
     if chosen:
-        ids = ",".join(str(s["id"]) for s in chosen)
-        metrics = _sb_get(
-            f"competitor_metrics?session_id=in.({ids})&select=session_id,nm_id,name,brand,views,card_opens,ctr,orders"
-        )
+        id_list = []
+        session_period = {}
+        for sess in chosen:
+            period = (sess.get("period_begin"), sess.get("period_end"))
+            ids = sess.get("session_ids") or [sess.get("id")]
+            for sid in ids:
+                sid = _as_int(sid)
+                if sid is None:
+                    continue
+                id_list.append(sid)
+                session_period[sid] = period
+        if id_list:
+            ids = ",".join(str(sid) for sid in id_list)
+            raw_metrics = _sb_get(
+                f"competitor_metrics?session_id=in.({ids})&select=session_id,nm_id,name,brand,views,card_opens,ctr,orders"
+            )
+            metrics = _dedupe_week_metrics(raw_metrics, session_period) if days == 30 else raw_metrics
     by_nm = aggregate_metrics(metrics)
-    span = covered_days(chosen, days)
     catalog = _own_catalog()
     own_ids = set(catalog)
     # Карточка из файла, которую кабинет уже знает. Чужие nm в каталог не попадают.
@@ -307,6 +423,7 @@ def load_board(days: int) -> dict:
     ))
     return {
         "days": days,
+        "period_label": period_label,
         "covered_days": span,
         "own_views_per_day": OWN_VIEWS_PER_DAY,
         "rival_views_per_day": RIVAL_VIEWS_PER_DAY,
@@ -596,6 +713,7 @@ def ctr_board(request: Request, days: int = 7):
     board = load_board(days)
     return {
         "days": board["days"],
+        "period_label": board.get("period_label") or "",
         "covered_days": board["covered_days"],
         "own_views_per_day": board["own_views_per_day"],
         "rival_views_per_day": board["rival_views_per_day"],

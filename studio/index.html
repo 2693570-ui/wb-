@@ -88,9 +88,9 @@ textarea{min-height:90px;resize:vertical}
           <div>
             <label>Период</label>
             <div class="pills">
-              <button class="btn on" id="d7" onclick="setCtrDays(7)">7 дней</button>
+              <button class="btn" id="d7" onclick="setCtrDays(7)">7 дней</button>
               <button class="btn" id="d14" onclick="setCtrDays(14)">14 дней</button>
-              <button class="btn" id="d30" onclick="setCtrDays(30)">30 дней</button>
+              <button class="btn on" id="d30" onclick="setCtrDays(30)">30 дней</button>
             </div>
           </div>
           <div style="flex:0"><label>&nbsp;</label><button class="btn" id="adsBtn" onclick="loadAds()">Рекламный CTR</button></div>
@@ -251,7 +251,7 @@ async function runSerp() {
 
 function esc(s){ return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
-let CTR_DAYS = 7;
+let CTR_DAYS = 30;
 let CTR_BOARD = null;
 let CTR_NM = null;
 let CTR_SHOW_EMPTY = false;
@@ -282,8 +282,9 @@ async function loadCtr(){
     const ownDay = d.own_views_per_day || 3000;
     const rivalDay = d.rival_views_per_day || 5000;
     const span = d.covered_days || CTR_DAYS;
+    const title = d.period_label ? (d.period_label + '. ') : '';
     st.textContent = files
-      ? `Файлы: ${files}. Своих карточек в сравнении: ${d.compared_count} из ${d.own_count}. Свои — от ${ownDay.toLocaleString('ru-RU')} показов в день (за ${span} дн. это ${(d.own_min_views||ownDay*span).toLocaleString('ru-RU')}). Конкурент — больше ${rivalDay.toLocaleString('ru-RU')} в день.`
+      ? `${title}Файлы: ${files}. Своих карточек в сравнении: ${d.compared_count} из ${d.own_count}. Свои — от ${ownDay.toLocaleString('ru-RU')} показов в день (за ${span} дн. это ${(d.own_min_views||ownDay*span).toLocaleString('ru-RU')}). Конкурент — больше ${rivalDay.toLocaleString('ru-RU')} в день.`
       : 'В этом окне нет файлов «Сравнение карточек». Загрузите их на дашборде.';
     renderCtrOwn();
     document.getElementById('ctrDetail').innerHTML = '';
