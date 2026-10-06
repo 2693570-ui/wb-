@@ -54,7 +54,7 @@ textarea{min-height:90px;resize:vertical}
   <div class="box">
     <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Vi-Smart</div>
     <h1>Studio</h1>
-    <p class="lead">Выдача WB, эталоны CTR и сбор слайдов. Вход для Владислава и менеджеров.</p>
+    <p class="lead">Сравнение карточек, эталоны CTR и сбор слайдов. Вход для Владислава и менеджеров.</p>
     <label>Логин</label>
     <select id="loginName">
       <option value="vladislav">Владислав</option>
@@ -73,7 +73,7 @@ textarea{min-height:90px;resize:vertical}
     <b>Vi-Smart Studio</b>
     <nav>
       <a class="on" data-p="ctr" onclick="go('ctr')">CTR</a>
-      <a data-p="serp" onclick="go('serp')">Выдача 1–50</a>
+      <a data-p="serp" onclick="go('serp')">Сравнение</a>
       <a data-p="refs" onclick="go('refs')">Эталоны</a>
       <a data-p="new" onclick="go('new')">Новый товар</a>
     </nav>
@@ -102,18 +102,20 @@ textarea{min-height:90px;resize:vertical}
     </div>
 
     <div class="page" id="p-serp">
-      <h1>Разбор выдачи</h1>
-      <p class="lead">Места 1–50 как у покупателя. CTR/CR — из отчётов «Сравнение карточек» на дашборде. На выходе — один главный слайд, который должен выигрывать клик.</p>
+      <h1>Сравнение</h1>
+      <p class="lead">Наша карточка против топа выдачи. В подбор попадают чужие часы того же цвета, той же формы и с ценой для клиента в пределах 400&nbsp;₽. Формы: прямоугольные, круглые женские, круглые мужские.</p>
       <div class="card">
         <div class="row">
-          <div><label>Ключ</label><input id="q" value="смарт часы мужские" list="qlist"></div>
-          <datalist id="qlist"></datalist>
-          <div style="flex:0"><label>&nbsp;</label><button class="btn p" id="runBtn" onclick="runSerp()">Сделать главный слайд</button></div>
+          <div>
+            <label>Наша карточка</label>
+            <select id="cmpNm"></select>
+          </div>
+          <div style="flex:0"><label>&nbsp;</label><button class="btn p" id="cmpBtn" onclick="runCompare()">Сравнить с топом</button></div>
         </div>
-        <div class="status" id="serpSt">WB · Москва · топ-50</div>
+        <div class="status" id="cmpSt">Москва, топ-50 по ключу формы. Цвет, цена ±400 ₽ и форма должны совпасть.</div>
       </div>
-      <div id="winner" style="margin-top:16px"></div>
-      <div id="mosaic" class="grid"></div>
+      <div id="cmpOwn" style="margin-top:16px"></div>
+      <div id="cmpOut"></div>
     </div>
 
     <div class="page" id="p-refs">
@@ -147,7 +149,7 @@ textarea{min-height:90px;resize:vertical}
         <input type="file" id="pFiles" accept="image/*" multiple>
         <div class="row" style="margin-top:14px">
           <button class="btn p" onclick="saveProject()">Сохранить бриф модели</button>
-          <button class="btn" onclick="go('serp')">Разбор выдачи по ключу</button>
+          <button class="btn" onclick="go('serp')">Сравнение с топом</button>
         </div>
         <div class="status" id="projSt"></div>
       </div>
@@ -206,8 +208,7 @@ function go(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('on'));
   document.querySelectorAll('.top nav a').forEach(a => a.classList.toggle('on', a.dataset.p===id));
   document.getElementById('p-'+id).classList.add('on');
-  if(id==='serp' && document.getElementById('pKey').value)
-    document.getElementById('q').value = document.getElementById('pKey').value;
+  if(id==='serp') fillCompareSelect();
 }
 
 async function loadKeys() {
@@ -219,34 +220,72 @@ async function loadKeys() {
   } catch(e) {}
 }
 
-async function runSerp() {
-  const q = document.getElementById('q').value.trim();
-  const st = document.getElementById('serpSt');
-  const btn = document.getElementById('runBtn');
-  if(!q) { st.textContent = 'Нужен ключ'; return; }
+function fillCompareSelect() {
+  const sel = document.getElementById('cmpNm');
+  if(!sel) return;
+  const prev = sel.value;
+  const own = (CTR_BOARD && CTR_BOARD.own) || [];
+  const ready = own.filter(c => c.views > 0 || c.ctr != null);
+  const list = ready.length ? ready : own;
+  sel.innerHTML = list.map(c => `<option value="${c.nm_id}">${esc(c.vendor_code || c.nm_id)} · ${c.nm_id}</option>`).join('')
+    || '<option value="">Нет карточек</option>';
+  if(prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
+
+async function runCompare() {
+  const nm = document.getElementById('cmpNm').value;
+  const st = document.getElementById('cmpSt');
+  const btn = document.getElementById('cmpBtn');
+  if(!nm) { st.textContent = 'Нет нашей карточки'; return; }
   btn.disabled = true;
-  st.textContent = 'Снимаю места 1–50… 15–25 сек';
+  st.textContent = 'Снимаю топ и сверяю цвет, цену и форму… до 40 секунд';
+  document.getElementById('cmpOut').innerHTML = '';
   try {
-    const r = await fetch(API + '/api/visual/serp', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({query:q, dest:-1257786, limit:50, force:true})
+    const r = await fetch(API + '/api/studio/compare', {
+      method:'POST', headers: headers(true),
+      body: JSON.stringify({nm_id: Number(nm)})
     });
     const d = await r.json();
-    if(!r.ok) throw new Error(d.detail || d.error || r.status);
-    const w = (d.brief && d.brief.winner) || {};
-    const beats = (w.why_beats || d.brief && d.brief.holes || []).map(x => `<li>${esc(x)}</li>`).join('');
-    document.getElementById('winner').innerHTML = `<div class="card">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Слайд против топ-50 · CTR совпало ${(d.funnel&&d.funnel.matched)||0} из ${(d.items||[]).length}</div>
-      <div style="font-size:16px;font-weight:600;margin-bottom:8px">${esc(w.title||'Главный слайд')} · ${esc(w.headline||'')}</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:8px">${esc(w.composition||'')}</div>
-      <ul style="padding-left:18px;font-size:13px;line-height:1.45;color:var(--muted)">${beats}</ul>
-    </div>`;
-    document.getElementById('mosaic').innerHTML = (d.items||[]).slice(0,50).map(it =>
-      `<a href="${esc(it.url||'#')}" target="_blank" rel="noopener"><img src="${esc(it.thumb||'')}" alt=""></a>`
-    ).join('');
-    st.textContent = 'Готово · ' + ((d.items||[]).length) + ' мест';
+    if(!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : 'Ошибка');
+    renderCompare(d);
   } catch(e) { st.textContent = e.message; }
   finally { btn.disabled = false; }
+}
+
+function renderCompare(d) {
+  const own = d.own || {};
+  const price = own.price != null ? Number(own.price).toLocaleString('ru-RU') + ' ₽' : '—';
+  document.getElementById('cmpOwn').innerHTML = `<div class="card">
+    <div style="font-size:16px;font-weight:600">${esc(own.vendor_code || own.nm_id)}</div>
+    <div class="status">${esc(own.shape || 'форма не определена')} · ${esc(own.color || 'цвет не определён')} · ${price}${own.ctr != null ? ' · CTR ' + ctrPct(own.ctr) : ''}</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:6px">${esc(own.name || '')}</div>
+  </div>`;
+  if(!d.ok) {
+    document.getElementById('cmpSt').textContent = d.reason || 'Не собралось';
+    document.getElementById('cmpOut').innerHTML = '';
+    return;
+  }
+  const sk = d.skipped || {};
+  document.getElementById('cmpSt').textContent =
+    `Ключ «${d.query}», мест ${d.seen}. Подходит ${(d.matches || []).length}. Отсеяно: цена ${sk.price || 0}, цвет ${sk.color || 0}, форма ${sk.shape || 0}, наши ${sk.own || 0}. CTR — ${d.period_label || 'прошлый месяц'}, если карточка была в файле.`;
+  const body = (d.matches || []).map(c => `<tr>
+      <td>${c.position || '—'}</td>
+      <td>${c.thumb ? `<img src="${esc(c.thumb)}" alt="" style="width:46px;height:62px;object-fit:cover;border-radius:6px">` : ''}</td>
+      <td><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.brand || c.nm_id)}</a>
+        <div style="color:var(--muted);font-size:11px">${esc(c.name || '')}</div></td>
+      <td>${Number(c.price || 0).toLocaleString('ru-RU')} ₽</td>
+      <td>${c.delta > 0 ? '+' : ''}${c.delta} ₽</td>
+      <td>${esc(c.color || '')}</td>
+      <td>${esc(c.shape || '')}</td>
+      <td>${ctrPct(c.ctr)}</td>
+      <td>${c.orders != null ? Number(c.orders).toLocaleString('ru-RU') : '—'}</td>
+    </tr>`).join('');
+  document.getElementById('cmpOut').innerHTML = `<div class="card" style="overflow:auto;margin-top:16px">
+    <table class="table">
+      <thead><tr><th>Место</th><th></th><th>Конкурент</th><th>Цена</th><th>± к нам</th><th>Цвет</th><th>Форма</th><th>CTR</th><th>Заказы</th></tr></thead>
+      <tbody>${body || '<tr><td colspan="9">В топе нет карточек того же цвета, формы и цены ±400 ₽.</td></tr>'}</tbody>
+    </table>
+  </div>`;
 }
 
 function esc(s){ return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -287,6 +326,7 @@ async function loadCtr(){
       ? `${title}Файлы: ${files}. Своих карточек в сравнении: ${d.compared_count} из ${d.own_count}. Свои — от ${ownDay.toLocaleString('ru-RU')} показов в день (за ${span} дн. это ${(d.own_min_views||ownDay*span).toLocaleString('ru-RU')}). Конкурент — больше ${rivalDay.toLocaleString('ru-RU')} в день.`
       : 'В этом окне нет файлов «Сравнение карточек». Загрузите их на дашборде.';
     renderCtrOwn();
+    fillCompareSelect();
     document.getElementById('ctrDetail').innerHTML = '';
     CTR_NM = null;
   } catch(e) { st.textContent = e.message; }

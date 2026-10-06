@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 
 import httpx
@@ -26,6 +27,27 @@ DEST_MOSCOW = -1257786
 SERP_TTL_SEC = 6 * 3600
 SERP_CACHE_KEY = "studio_serp_cache"
 REVERSE_SHELF_CAP = 8
+PRICE_BAND_RUB = 400
+
+# Сначала более длинные семьи, чтобы «серебристый» не склеился с «серый».
+_COLOR_FAMILIES = (
+    ("серебристый", ("серебр", "silver")),
+    ("золотой", ("золот", "gold")),
+    ("черный", ("черн", "black")),
+    ("розовый", ("розов", "pink")),
+    ("голубой", ("голуб",)),
+    ("синий", ("синий", "синяя", "синие", "blue")),
+    ("зеленый", ("зелен", "green")),
+    ("красный", ("красн", "red")),
+    ("бордовый", ("бордов",)),
+    ("фиолетовый", ("фиолет", "сирен", "purple")),
+    ("бежевый", ("беж",)),
+    ("коричневый", ("корич", "brown")),
+    ("белый", ("белый", "белая", "белые", "white")),
+    ("серый", ("серый", "серая", "серые", "gray", "grey")),
+    ("оранжевый", ("оранж",)),
+    ("желтый", ("желт", "yellow")),
+)
 
 # «водонипроницаемые» — написание, которое вводят покупатели.
 QUERIES = (
@@ -455,9 +477,447 @@ def _verdict(own: dict, rival: dict, in_score: bool) -> str:
     return "ниже"
 
 
+def _norm(text: str) -> str:
+    return (text or "").lower().replace("ё", "е")
+
+
+def color_families(text: str) -> set:
+    t = _norm(text)
+    found = set()
+    for family, keys in _COLOR_FAMILIES:
+        if any(key in t for key in keys):
+            found.add(family)
+    return found
+
+
+def _vendor_color(vendor: str) -> str:
+    u = (vendor or "").upper()
+    if "GOLD" in u or "ЗОЛОТ" in u:
+        return "золотой"
+    if "SILVER" in u or "СЕРЕБ" in u:
+        return "серебристый"
+    if "BLACK" in u or "ЧЕРН" in u:
+        return "черный"
+    if "PINK" in u or "РОЗОВ" in u:
+        return "розовый"
+    if "WHITE" in u or "БЕЛ" in u:
+        return "белый"
+    return ""
+
+
+def classify_shape(name: str, gender: str = "", form: str = "", vendor: str = "", trust_line: bool = False) -> str:
+    """Прямоугольные, круглые женские или круглые мужские. Пусто, если не разобрать."""
+    blob = _norm(" ".join(part for part in (name, form, vendor if trust_line else "") if part))
+    g = _norm(gender)
+    women = "жен" in g or "женск" in blob
+    men = "муж" in g or "мужск" in blob
+    rectangular = "прямоуг" in blob or "квадрат" in blob
+    form_l = _norm(form)
+    roundish = "кругл" in blob or ("круг" in form_l and "вокруг" not in form_l)
+    if trust_line and "zk" in _norm(vendor):
+        roundish = True
+    if rectangular and not roundish:
+        return "прямоугольные"
+    if roundish and not rectangular:
+        if women and not men:
+            return "круглые женские"
+        if men and not women:
+            return "круглые мужские"
+    return ""
+
+
+def _query_for_shape(shape: str) -> str:
+    if shape == "круглые женские":
+        return "смарт часы женские круглые"
+    if shape == "круглые мужские":
+        return "смарт часы мужские"
+    return "смарт часы"
+
+
+def _option_texts(data: dict) -> dict:
+    buckets = {"color": [], "gender": [], "form": [], "name": ""}
+    if not isinstance(data, dict):
+        return buckets
+    options = list(data.get("options") or [])
+    for group in data.get("grouped_options") or []:
+        if isinstance(group, dict):
+            options.extend(group.get("options") or [])
+    for opt in options:
+        if not isinstance(opt, dict):
+            continue
+        label = _norm(str(opt.get("name") or ""))
+        value = str(opt.get("value") or "").strip()
+        if not value:
+            continue
+        if "цвет" in label:
+            buckets["color"].append(value)
+        elif label == "пол" or label.startswith("пол "):
+            buckets["gender"].append(value)
+        elif "форм" in label:
+            buckets["form"].append(value)
+    title = data.get("imt_name") or data.get("subj_name") or data.get("name") or ""
+    buckets["name"] = str(title or "")
+    return buckets
+
+
 def _main():
     import main as app_main
     return app_main
+
+
+def _basket_card_url(nm_id: int) -> str:
+    app_main = _main()
+    img = app_main.wb_product_img_url(int(nm_id), "tm")
+    if "/images/" not in img:
+        return ""
+    return img.split("/images/")[0] + "/info/ru/card.json"
+
+
+def _fetch_card_json(nm_id: int) -> dict:
+    url = _basket_card_url(nm_id)
+    if not url:
+        return {}
+    try:
+        resp = httpx.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
+            timeout=12,
+            follow_redirects=True,
+        )
+    except Exception as e:
+        logger.warning(f"card.json {nm_id}: {e}")
+        return {}
+    if not resp.is_success:
+        return {}
+    try:
+        data = resp.json()
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _storefront_products(nm_ids: list) -> dict:
+    """nm → цена для клиента, цвета и название с витрины card.wb.ru."""
+    app_main = _main()
+    ids = []
+    for raw in nm_ids:
+        nm = _as_int(raw)
+        if nm and nm not in ids:
+            ids.append(nm)
+    found = {}
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json",
+        "Origin": "https://www.wildberries.ru",
+        "Referer": "https://www.wildberries.ru/",
+    }
+    for i in range(0, len(ids), 50):
+        batch = ids[i:i + 50]
+        nm_param = ";".join(str(x) for x in batch)
+        urls = [
+            f"https://card.wb.ru/cards/v4/detail?appType=1&curr=rub&dest={DEST_MOSCOW}&nm={nm_param}",
+            f"https://card.wb.ru/cards/v2/detail?appType=1&curr=rub&dest={DEST_MOSCOW}&nm={nm_param}",
+        ]
+        for url in urls:
+            try:
+                resp = httpx.get(url, headers=headers, timeout=30)
+            except Exception as e:
+                logger.warning(f"storefront: {e}")
+                continue
+            if not resp.is_success:
+                continue
+            try:
+                data = resp.json()
+            except Exception:
+                continue
+            products = data.get("products") or (data.get("data") or {}).get("products") or []
+            if not products:
+                continue
+            for product in products:
+                if not isinstance(product, dict):
+                    continue
+                info = app_main._parse_client_product(product)
+                nm = info.get("nm_id")
+                if not nm:
+                    continue
+                colors = []
+                for color in product.get("colors") or []:
+                    if isinstance(color, dict) and color.get("name"):
+                        colors.append(str(color["name"]))
+                    elif isinstance(color, str) and color.strip():
+                        colors.append(color.strip())
+                found[int(nm)] = {
+                    "price": info.get("client_price"),
+                    "name": info.get("name") or "",
+                    "colors": colors,
+                    "brand": product.get("brand") or "",
+                }
+            break
+    return found
+
+
+def _content_face(nm_id: int) -> dict:
+    app_main = _main()
+    if not getattr(app_main, "WB_TOKEN", ""):
+        return {}
+    try:
+        resp = httpx.post(
+            f"{app_main.WB_CONTENT_URL}/content/v2/get/cards/list",
+            headers=app_main.wb_headers(),
+            json={
+                "settings": {
+                    "filter": {"textSearch": str(nm_id), "withPhoto": -1},
+                    "cursor": {"limit": 20},
+                }
+            },
+            timeout=20,
+        )
+    except Exception as e:
+        logger.warning(f"content face: {e}")
+        return {}
+    if not resp.is_success:
+        return {}
+    try:
+        cards = resp.json().get("cards") or []
+    except Exception:
+        return {}
+    for card in cards:
+        if _as_int(card.get("nmID") or card.get("nmId")) != nm_id:
+            continue
+        texts = {"color": [], "gender": [], "form": []}
+        for ch in card.get("characteristics") or []:
+            if not isinstance(ch, dict):
+                continue
+            label = _norm(str(ch.get("name") or ""))
+            value = ch.get("value")
+            if isinstance(value, list):
+                text = " ".join(str(v) for v in value if v)
+            else:
+                text = str(value or "").strip()
+            if not text:
+                continue
+            if "цвет" in label:
+                texts["color"].append(text)
+            elif label == "пол" or label.startswith("пол "):
+                texts["gender"].append(text)
+            elif "форм" in label:
+                texts["form"].append(text)
+        return {
+            "name": card.get("title") or "",
+            "vendor": card.get("vendorCode") or "",
+            "texts": texts,
+        }
+    return {}
+
+
+def _profile_own(nm_id: int, vendor: str, board_name: str) -> dict:
+    face = _fetch_card_json(nm_id)
+    opts = _option_texts(face)
+    content = _content_face(nm_id)
+    content_texts = content.get("texts") or {}
+    store = _storefront_products([nm_id]).get(nm_id) or {}
+    name = opts.get("name") or content.get("name") or store.get("name") or board_name or ""
+    vendor = content.get("vendor") or vendor or ""
+    color_text = " ".join(
+        (opts.get("color") or [])
+        + (content_texts.get("color") or [])
+        + (store.get("colors") or [])
+    )
+    if not color_families(color_text):
+        color_text = (color_text + " " + _vendor_color(vendor)).strip()
+    gender = " ".join((opts.get("gender") or []) + (content_texts.get("gender") or []))
+    form = " ".join((opts.get("form") or []) + (content_texts.get("form") or []))
+    shape = classify_shape(name, gender, form, vendor, trust_line=True)
+    families = sorted(color_families(color_text))
+    price = store.get("price")
+    try:
+        price = int(round(float(price))) if price is not None else None
+    except (TypeError, ValueError):
+        price = None
+    return {
+        "nm_id": nm_id,
+        "vendor_code": vendor,
+        "name": name,
+        "color": ", ".join(families),
+        "colors": families,
+        "shape": shape,
+        "price": price,
+        "gender": gender,
+        "url": f"https://www.wildberries.ru/catalog/{nm_id}/detail.aspx",
+    }
+
+
+def _shapes_for(nm_ids: list, names: dict) -> dict:
+    """Форма конкурента: сначала из названия, иначе из публичной карточки."""
+    out = {}
+    need = []
+    for nm in nm_ids:
+        shape = classify_shape(names.get(nm) or "")
+        if shape:
+            out[nm] = {"shape": shape, "color": "", "source": "name"}
+        else:
+            need.append(nm)
+
+    def one(nm):
+        try:
+            data = _fetch_card_json(nm)
+            opts = _option_texts(data)
+            shape = classify_shape(
+                " ".join(part for part in (names.get(nm), opts.get("name")) if part),
+                " ".join(opts.get("gender") or []),
+                " ".join(opts.get("form") or []),
+            )
+            return nm, shape, " ".join(opts.get("color") or [])
+        except Exception as e:
+            logger.warning(f"shape {nm}: {e}")
+            return nm, "", ""
+
+    if need:
+        workers = min(8, len(need))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for nm, shape, color in pool.map(one, need):
+                out[nm] = {"shape": shape, "color": color, "source": "card"}
+    return out
+
+
+def compare_with_top(board: dict, nm_id: int) -> dict:
+    catalog = board.get("catalog") or {}
+    if nm_id not in board.get("own_ids", set()) and nm_id not in catalog:
+        raise HTTPException(status_code=404, detail="Карточка не найдена в кабинете")
+    own_bucket = (board.get("by_nm") or {}).get(nm_id) or {}
+    vendor = catalog.get(nm_id) or ""
+    own = _profile_own(nm_id, vendor, own_bucket.get("name") or "")
+    own["ctr"] = own_bucket.get("ctr")
+    own["orders"] = own_bucket.get("orders")
+    own["views"] = own_bucket.get("views")
+    if not own["colors"]:
+        return {"ok": False, "reason": "У нашей карточки не читается цвет часов.", "own": own, "matches": []}
+    if not own["shape"]:
+        return {
+            "ok": False,
+            "reason": "У нашей карточки не читается форма. Нужны прямоугольные, круглые женские или круглые мужские.",
+            "own": own,
+            "matches": [],
+        }
+    if own["price"] is None:
+        return {"ok": False, "reason": "Нет цены для клиента на витрине WB.", "own": own, "matches": []}
+
+    query = _query_for_shape(own["shape"])
+    app_main = _main()
+    live = app_main.fetch_wb_serp_products(query, DEST_MOSCOW, limit=50)
+    products = live.get("products") or []
+    if not products:
+        return {
+            "ok": False,
+            "reason": f"Выдача по ключу «{query}» не снялась." + (f" {live.get('error')}" if live.get("error") else ""),
+            "own": own,
+            "query": query,
+            "matches": [],
+        }
+
+    own_ids = set(board.get("own_ids") or [])
+    own_colors = set(own["colors"])
+    skipped = {"own": 0, "price": 0, "color": 0, "shape": 0}
+    priced = []
+    for product in products:
+        nm = _as_int(product.get("nm_id"))
+        if not nm or nm == nm_id:
+            continue
+        if nm in own_ids:
+            skipped["own"] += 1
+            continue
+        price = product.get("price")
+        try:
+            price = int(round(float(price))) if price is not None else None
+        except (TypeError, ValueError):
+            price = None
+        if price is None or abs(price - own["price"]) > PRICE_BAND_RUB:
+            skipped["price"] += 1
+            continue
+        priced.append({
+            "nm_id": nm,
+            "position": product.get("position"),
+            "brand": product.get("brand") or "",
+            "name": product.get("name") or "",
+            "price": price,
+            "url": product.get("url") or f"https://www.wildberries.ru/catalog/{nm}/detail.aspx",
+            "thumb": product.get("thumb") or "",
+        })
+
+    store = _storefront_products([row["nm_id"] for row in priced])
+    color_ok = []
+    for row in priced:
+        face = store.get(row["nm_id"]) or {}
+        if face.get("price") is not None:
+            try:
+                row["price"] = int(round(float(face["price"])))
+            except (TypeError, ValueError):
+                pass
+        if abs(row["price"] - own["price"]) > PRICE_BAND_RUB:
+            skipped["price"] += 1
+            continue
+        if face.get("name"):
+            row["name"] = face["name"]
+        if face.get("brand"):
+            row["brand"] = face["brand"]
+        color_text = " ".join(face.get("colors") or [])
+        if not color_text:
+            color_text = row["name"]
+        families = color_families(color_text)
+        if not (families & own_colors):
+            skipped["color"] += 1
+            continue
+        row["colors"] = sorted(families)
+        row["color"] = ", ".join(row["colors"])
+        color_ok.append(row)
+
+    shapes = _shapes_for(
+        [row["nm_id"] for row in color_ok],
+        {row["nm_id"]: row["name"] for row in color_ok},
+    )
+    matches = []
+    by_nm = board.get("by_nm") or {}
+    for row in color_ok:
+        info = shapes.get(row["nm_id"]) or {}
+        shape = info.get("shape") or ""
+        if not shape and own["shape"] == "круглые женские":
+            blob = _norm(row["name"])
+            if "прямоуг" not in blob and "квадрат" not in blob and "мужск" not in blob:
+                shape = own["shape"]
+        if shape != own["shape"]:
+            skipped["shape"] += 1
+            continue
+        bucket = by_nm.get(row["nm_id"]) or {}
+        matches.append({
+            "nm_id": row["nm_id"],
+            "position": row["position"],
+            "brand": row["brand"],
+            "name": row["name"],
+            "price": row["price"],
+            "delta": row["price"] - own["price"],
+            "color": row["color"],
+            "shape": shape,
+            "ctr": bucket.get("ctr"),
+            "orders": bucket.get("orders"),
+            "views": bucket.get("views"),
+            "url": row["url"],
+            "thumb": row["thumb"],
+        })
+    matches.sort(key=lambda row: (row.get("position") or 999, row["nm_id"]))
+    return {
+        "ok": True,
+        "reason": "",
+        "query": query,
+        "price_band": PRICE_BAND_RUB,
+        "period_label": board.get("period_label") or "",
+        "own": own,
+        "matches": matches,
+        "seen": len(products),
+        "skipped": skipped,
+    }
 
 
 def _serp_top50() -> tuple[dict, dict]:
@@ -769,3 +1229,15 @@ def ctr_ads(request: Request, body: dict):
     cards = attach_ads(board["own"], ads)
     with_ads = sum(1 for c in cards if c.get("ad_views"))
     return {"days": days, "with_ads": with_ads, "own": cards}
+
+
+@router.post("/compare")
+def studio_compare(request: Request, body: dict):
+    _user(request)
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="invalid body")
+    nm_id = _as_int(body.get("nm_id"))
+    if not nm_id:
+        raise HTTPException(status_code=400, detail="nm_id required")
+    board = load_board(30)
+    return compare_with_top(board, nm_id)
