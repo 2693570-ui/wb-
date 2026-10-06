@@ -744,6 +744,32 @@ def _product_colors(product: dict) -> list:
     return colors
 
 
+def _chrome_get(url: str, params: dict, headers: dict):
+    """httpx, а при 403 — запрос с отпечатком Chrome. WB режет датацентр."""
+    try:
+        resp = httpx.get(url, headers=headers, params=params, timeout=25, follow_redirects=True)
+        if resp.status_code != 403:
+            return resp.status_code, resp.json()
+    except Exception as e:
+        logger.warning(f"search httpx: {e}")
+    try:
+        from curl_cffi import requests as creq
+        resp = creq.get(
+            url,
+            params=params,
+            headers=headers,
+            impersonate="chrome131",
+            timeout=20,
+            allow_redirects=True,
+        )
+        if resp.status_code != 200:
+            return resp.status_code, None
+        return resp.status_code, resp.json()
+    except Exception as e:
+        logger.warning(f"search chrome: {e}")
+        return 0, None
+
+
 def _search_rows(query: str, limit: int = 50) -> dict:
     """Выдача WB с ценой для клиента и цветом варианта."""
     app_main = _main()
@@ -758,37 +784,24 @@ def _search_rows(query: str, limit: int = 50) -> dict:
         "Referer": "https://www.wildberries.ru/",
     }
     last_err = None
+    params = {
+        "appType": 1,
+        "curr": "rub",
+        "dest": DEST_MOSCOW,
+        "query": query,
+        "resultset": "catalog",
+        "sort": "popular",
+        "spp": 30,
+        "page": 1,
+    }
     for attempt in range(4):
-        try:
-            app_main._wb_search_throttle(0.35 if attempt == 0 else 0.8)
-            resp = httpx.get(
-                app_main._wb_search_next_host(),
-                headers=headers,
-                params={
-                    "appType": 1,
-                    "curr": "rub",
-                    "dest": DEST_MOSCOW,
-                    "query": query,
-                    "resultset": "catalog",
-                    "sort": "popular",
-                    "spp": 30,
-                    "page": 1,
-                },
-                timeout=25,
-            )
-        except Exception as e:
-            last_err = str(e)[:120]
-            continue
-        if resp.status_code == 429:
+        app_main._wb_search_throttle(0.35 if attempt == 0 else 0.8)
+        status, data = _chrome_get(app_main._wb_search_next_host(), params, headers)
+        if status == 429:
             last_err = "429"
             continue
-        if not resp.is_success:
-            last_err = f"http {resp.status_code}"
-            continue
-        try:
-            data = resp.json()
-        except Exception as e:
-            last_err = f"json {e}"
+        if status != 200 or not isinstance(data, dict):
+            last_err = f"http {status}" if status else "search failed"
             continue
         products = data.get("products") or (data.get("data") or {}).get("products") or []
         rows = []
@@ -826,6 +839,39 @@ def _single_color(*texts: str) -> str:
     return ""
 
 
+def _card_face(nm_id: int) -> dict:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json",
+        "Origin": "https://www.wildberries.ru",
+        "Referer": "https://www.wildberries.ru/",
+    }
+    status, data = _chrome_get(
+        "https://card.wb.ru/cards/v4/detail",
+        {"appType": 1, "curr": "rub", "dest": DEST_MOSCOW, "spp": 30, "nm": nm_id},
+        headers,
+    )
+    if status != 200 or not isinstance(data, dict):
+        return {}
+    products = data.get("products") or (data.get("data") or {}).get("products") or []
+    app_main = _main()
+    for product in products:
+        if not isinstance(product, dict):
+            continue
+        info = app_main._parse_client_product(product)
+        if info.get("nm_id") != nm_id:
+            continue
+        return {
+            "price": info.get("client_price"),
+            "name": info.get("name") or "",
+            "colors": _product_colors(product),
+        }
+    return {}
+
+
 def _profile_own(nm_id: int, vendor: str, board_name: str) -> dict:
     face = _fetch_card_json(nm_id)
     opts = _option_texts(face)
@@ -833,6 +879,10 @@ def _profile_own(nm_id: int, vendor: str, board_name: str) -> dict:
     content_texts = content.get("texts") or {}
     found = _search_rows(str(nm_id), limit=8)
     store = next((row for row in found.get("products") or [] if row["nm_id"] == nm_id), {})
+    if store.get("price") is None:
+        card = _card_face(nm_id)
+        if card:
+            store = {**store, **{k: v for k, v in card.items() if v not in (None, "", [])}}
     name = opts.get("name") or content.get("name") or store.get("name") or board_name or ""
     vendor = opts.get("vendor") or content.get("vendor") or vendor or ""
     color = _single_color(" ".join(store.get("colors") or []))
