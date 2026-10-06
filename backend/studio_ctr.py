@@ -3,7 +3,8 @@
 Цифры — из еженедельных файлов «Сравнение карточек».
 В зачёт попадает конкурент, у которого есть заказы, он в топ-50
 хотя бы по одному боевому ключу и связан полкой «Смотрите также».
-Показы ниже MIN_VIEWS — «мало данных», в победу и проигрыш не идут.
+Свои карточки: от 3 000 показов в день. Конкурент в зачёте: больше 5 000 в день.
+Ниже своего порога — «мало данных», в победу и проигрыш не идёт.
 """
 from __future__ import annotations
 
@@ -19,7 +20,8 @@ from studio_auth import studio_user_from_request
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/studio", tags=["studio-ctr"])
 
-MIN_VIEWS = 5000
+OWN_VIEWS_PER_DAY = 3000
+RIVAL_VIEWS_PER_DAY = 5000
 DEST_MOSCOW = -1257786
 SERP_TTL_SEC = 6 * 3600
 SERP_CACHE_KEY = "studio_serp_cache"
@@ -205,7 +207,6 @@ def aggregate_metrics(rows: list) -> dict:
         bucket["card_opens"] = int(round(opens))
         bucket["orders"] = int(round(bucket["orders"]))
         bucket["ctr"] = round(opens / views * 100, 2) if views else None
-        bucket["reliable"] = bucket["views"] >= MIN_VIEWS
         bucket["url"] = f"https://www.wildberries.ru/catalog/{bucket['nm_id']}/detail.aspx"
     return by_nm
 
@@ -236,10 +237,33 @@ def _own_catalog() -> dict:
     return own
 
 
-def _card_public(bucket: dict, vendor_code: str = "") -> dict:
+def covered_days(sessions: list, window_days: int) -> int:
+    """Сколько календарных дней реально закрыто файлами сравнения."""
+    total = 0
+    for sess in sessions or []:
+        begin = _parse_date(sess.get("period_begin"))
+        end = _parse_date(sess.get("period_end"))
+        if not begin or not end:
+            continue
+        if end < begin:
+            begin, end = end, begin
+        total += (end - begin).days + 1
+    return total if total > 0 else max(int(window_days or 1), 1)
+
+
+def _views_ok(views: int, span_days: int, is_own: bool) -> bool:
+    span = max(int(span_days or 1), 1)
+    per_day = (views or 0) / span
+    if is_own:
+        return per_day >= OWN_VIEWS_PER_DAY
+    return per_day > RIVAL_VIEWS_PER_DAY
+
+
+def _card_public(bucket: dict, vendor_code: str = "", span_days: int = 1, is_own: bool = True) -> dict:
     out = dict(bucket)
     out["vendor_code"] = vendor_code or ""
-    out["low_data"] = not out.get("reliable")
+    out["reliable"] = _views_ok(int(out.get("views") or 0), span_days, is_own)
+    out["low_data"] = not out["reliable"]
     if out.get("views", 0) <= 0 and out.get("ctr") is None:
         out["status"] = "нет в сравнении"
     elif out["low_data"]:
@@ -259,6 +283,7 @@ def load_board(days: int) -> dict:
             f"competitor_metrics?session_id=in.({ids})&select=session_id,nm_id,name,brand,views,card_opens,ctr,orders"
         )
     by_nm = aggregate_metrics(metrics)
+    span = covered_days(chosen, days)
     catalog = _own_catalog()
     own_ids = set(catalog)
     # Карточка из файла, которую кабинет уже знает. Чужие nm в каталог не попадают.
@@ -270,12 +295,11 @@ def load_board(days: int) -> dict:
             "card_opens": 0,
             "orders": 0,
             "ctr": None,
-            "reliable": False,
             "name": "",
             "brand": "",
             "url": f"https://www.wildberries.ru/catalog/{nm}/detail.aspx",
         }
-        own_cards.append(_card_public(bucket, vendor))
+        own_cards.append(_card_public(bucket, vendor, span, True))
     own_cards.sort(key=lambda c: (
         0 if c.get("ctr") is not None else 1,
         -(c.get("views") or 0),
@@ -283,7 +307,12 @@ def load_board(days: int) -> dict:
     ))
     return {
         "days": days,
-        "min_views": MIN_VIEWS,
+        "covered_days": span,
+        "own_views_per_day": OWN_VIEWS_PER_DAY,
+        "rival_views_per_day": RIVAL_VIEWS_PER_DAY,
+        "own_min_views": OWN_VIEWS_PER_DAY * span,
+        "rival_min_views": RIVAL_VIEWS_PER_DAY * span,
+        "min_views": OWN_VIEWS_PER_DAY * span,
         "queries": list(QUERIES),
         "sessions": chosen,
         "own": own_cards,
@@ -396,7 +425,8 @@ def qualify_card(board: dict, nm_id: int, manual_ids: list[int]) -> dict:
         "brand": "",
         "url": f"https://www.wildberries.ru/catalog/{nm_id}/detail.aspx",
     }
-    own = _card_public(own_bucket, catalog.get(nm_id) or "")
+    span = board.get("covered_days") or covered_days(board.get("sessions"), board.get("days") or 7)
+    own = _card_public(own_bucket, catalog.get(nm_id) or "", span, True)
     positions, serp_report = _serp_top50()
     my_shelf, shelf_error = _shelf_ids(nm_id, allow_live=True)
     my_shelf_set = set(my_shelf)
@@ -462,7 +492,7 @@ def qualify_card(board: dict, nm_id: int, manual_ids: list[int]) -> dict:
         in_top = rival_nm in positions
         has_orders = bucket.get("orders", 0) > 0
         in_score = (on_my or i_on) and in_top and has_orders
-        card = _card_public(bucket)
+        card = _card_public(bucket, "", span, False)
         card.update({
             "on_my_shelf": on_my,
             "i_on_their_shelf": i_on,
@@ -566,7 +596,12 @@ def ctr_board(request: Request, days: int = 7):
     board = load_board(days)
     return {
         "days": board["days"],
-        "min_views": board["min_views"],
+        "covered_days": board["covered_days"],
+        "own_views_per_day": board["own_views_per_day"],
+        "rival_views_per_day": board["rival_views_per_day"],
+        "own_min_views": board["own_min_views"],
+        "rival_min_views": board["rival_min_views"],
+        "min_views": board["own_min_views"],
         "queries": board["queries"],
         "sessions": board["sessions"],
         "own": board["own"],

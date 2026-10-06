@@ -82,7 +82,7 @@ textarea{min-height:90px;resize:vertical}
   <div class="wrap">
     <div class="page on" id="p-ctr">
       <h1>CTR против полок</h1>
-      <p class="lead">Сравнение из дашборда. В зачёт идёт конкурент с заказами, из топ-50 по боевым ключам, который стоит у вас в «Смотрите также» или у которого стоите вы. Меньше 5&nbsp;000 показов — мало данных, в победу не считается.</p>
+      <p class="lead">Сравнение из дашборда. В зачёт идёт конкурент с заказами, из топ-50 по боевым ключам, который стоит у вас в «Смотрите также» или у которого стоите вы. Свои карточки сравниваем от 3&nbsp;000 показов в день. У конкурента должно быть больше 5&nbsp;000 показов в день, иначе это мало данных и в победу не считается.</p>
       <div class="card">
         <div class="row">
           <div>
@@ -279,8 +279,11 @@ async function loadCtr(){
     if(!r.ok) throw new Error(d.detail || 'Ошибка');
     CTR_BOARD = d;
     const files = (d.sessions||[]).map(s => s.period_begin+' — '+s.period_end).join(', ');
+    const ownDay = d.own_views_per_day || 3000;
+    const rivalDay = d.rival_views_per_day || 5000;
+    const span = d.covered_days || CTR_DAYS;
     st.textContent = files
-      ? `Файлы: ${files}. Своих карточек в сравнении: ${d.compared_count} из ${d.own_count}. Порог ${d.min_views} показов.`
+      ? `Файлы: ${files}. Своих карточек в сравнении: ${d.compared_count} из ${d.own_count}. Свои — от ${ownDay.toLocaleString('ru-RU')} показов в день (за ${span} дн. это ${(d.own_min_views||ownDay*span).toLocaleString('ru-RU')}). Конкурент — больше ${rivalDay.toLocaleString('ru-RU')} в день.`
       : 'В этом окне нет файлов «Сравнение карточек». Загрузите их на дашборде.';
     renderCtrOwn();
     document.getElementById('ctrDetail').innerHTML = '';
@@ -353,7 +356,7 @@ function renderQualify(d){
   const pos = (d.our_positions||[]).map(p => `${p.query}: ${p.position}`).join(' · ');
   const head = s.own_reliable
     ? `Выше ${s.above} · ниже ${s.below} · мало данных ${s.low_data} · в зачёте ${s.scored}`
-    : `Наша карточка ниже 5 000 показов — итог «выше / ниже» не ставим. В зачёте ${s.scored}.`;
+    : `Наша карточка ниже 3 000 показов в день — итог «выше / ниже» не ставим. В зачёте ${s.scored}.`;
   const qErr = (d.queries||[]).filter(q => q.error).map(q => q.query).join(', ');
   document.getElementById('qualSt').textContent = head + (s.shelf_error ? ' Полка: '+s.shelf_error : '');
   const rivals = d.rivals || [];
