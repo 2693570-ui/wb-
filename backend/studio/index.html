@@ -41,6 +41,15 @@ textarea{min-height:90px;resize:vertical}
 .table th{text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px;padding:8px 6px;border-bottom:1px solid var(--border)}
 .table td{padding:8px 6px;border-bottom:1px solid var(--border);vertical-align:middle}
 .table tr.sel td{background:#F8F4F0}
+.cmp{width:max-content;min-width:100%;border-collapse:collapse;font-size:13px}
+.cmp th,.cmp td{border:none;padding:12px 16px;text-align:left;vertical-align:top;background:transparent}
+.cmp th{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+.cmp-own{cursor:pointer;font-weight:600}
+.cmp-own:hover{color:var(--accent)}
+.cmp-rival{display:flex;gap:10px;align-items:flex-start;min-width:160px}
+.cmp-rival img{width:46px;height:62px;object-fit:cover;border-radius:6px;background:#eee}
+.cmp-list{display:grid;grid-template-columns:max-content max-content;gap:8px 28px;font-size:13px;padding:4px 16px 8px}
+.cmp-list span{color:var(--muted)}
 .badge{display:inline-block;font-size:11px;padding:2px 7px;border-radius:99px;background:#EFEBE6;color:var(--muted)}
 .badge.ok{background:#E5F2EA;color:#246B45}
 .badge.bad{background:#FDE8DF;color:#A33B12}
@@ -252,38 +261,69 @@ async function runCompare() {
   finally { btn.disabled = false; }
 }
 
+function cmpNum(v, suffix) {
+  if(v == null || v === '') return '—';
+  const n = Number(v);
+  if(!Number.isFinite(n)) return '—';
+  const text = Number.isInteger(n) ? n.toLocaleString('ru-RU') : n.toLocaleString('ru-RU', {maximumFractionDigits: 2});
+  return suffix ? text + suffix : text;
+}
+
+function toggleCmpExtra() {
+  const row = document.getElementById('cmpExtra');
+  if(row) row.hidden = !row.hidden;
+}
+
 function renderCompare(d) {
   const own = d.own || {};
-  const price = own.price != null ? Number(own.price).toLocaleString('ru-RU') + ' ₽' : '—';
-  document.getElementById('cmpOwn').innerHTML = `<div class="card">
-    <div style="font-size:16px;font-weight:600">${esc(own.vendor_code || own.nm_id)}</div>
-    <div class="status">${esc(own.shape || 'форма не определена')} · ${esc(own.color || 'цвет не определён')} · ${price}${own.ctr != null ? ' · CTR ' + ctrPct(own.ctr) : ''}</div>
-    <div style="font-size:13px;color:var(--muted);margin-top:6px">${esc(own.name || '')}</div>
-  </div>`;
-  if(!d.ok) {
-    document.getElementById('cmpSt').textContent = d.reason || 'Не собралось';
-    document.getElementById('cmpOut').innerHTML = '';
-    return;
-  }
+  document.getElementById('cmpOwn').innerHTML = '';
+  const matches = d.matches || [];
   const sk = d.skipped || {};
-  document.getElementById('cmpSt').textContent =
-    `Ключ «${d.query}», мест ${d.seen}. Подходит ${(d.matches || []).length}. Отсеяно: цена ${sk.price || 0}, цвет ${sk.color || 0}, форма ${sk.shape || 0}, наши ${sk.own || 0}. CTR — ${d.period_label || 'прошлый месяц'}, если карточка была в файле.`;
-  const body = (d.matches || []).map(c => `<tr>
-      <td>${c.position || '—'}</td>
-      <td>${c.thumb ? `<img src="${esc(c.thumb)}" alt="" style="width:46px;height:62px;object-fit:cover;border-radius:6px">` : ''}</td>
-      <td><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.brand || c.nm_id)}</a>
-        <div style="color:var(--muted);font-size:11px">${esc(c.name || '')}</div></td>
-      <td>${Number(c.price || 0).toLocaleString('ru-RU')} ₽</td>
-      <td>${c.delta > 0 ? '+' : ''}${c.delta} ₽</td>
-      <td>${esc(c.color || '')}</td>
-      <td>${esc(c.shape || '')}</td>
-      <td>${ctrPct(c.ctr)}</td>
-      <td>${c.orders != null ? Number(c.orders).toLocaleString('ru-RU') : '—'}</td>
-    </tr>`).join('');
-  document.getElementById('cmpOut').innerHTML = `<div class="card" style="overflow:auto;margin-top:16px">
-    <table class="table">
-      <thead><tr><th>Место</th><th></th><th>Конкурент</th><th>Цена</th><th>± к нам</th><th>Цвет</th><th>Форма</th><th>CTR</th><th>Заказы</th></tr></thead>
-      <tbody>${body || '<tr><td colspan="9">В топе нет карточек того же цвета, формы и цены ±400 ₽.</td></tr>'}</tbody>
+  const note = !d.ok
+    ? (d.reason || 'Не собралось')
+    : `Ключ «${d.query || ''}». В подборке ${matches.length}. Средний CTR считается по тем, у кого есть CTR в файле. Отсеяно: цена ${sk.price || 0}, цвет ${sk.color || 0}, форма ${sk.shape || 0}.`;
+  document.getElementById('cmpSt').textContent = note;
+  const rivals = matches.map(c => `<td>
+      <a class="cmp-rival" href="${esc(c.url)}" target="_blank" rel="noopener">
+        ${c.thumb ? `<img src="${esc(c.thumb)}" alt="">` : ''}
+        <span>
+          <b>${esc(c.brand || c.name || c.nm_id)}</b>
+          <span style="display:block;color:var(--muted);font-size:12px;margin-top:4px">${ctrPct(c.ctr)}</span>
+        </span>
+      </a>
+    </td>`).join('');
+  const span = Math.max(matches.length, 1);
+  const week = own.week_label ? `Неделя ${own.week_label}` : 'Последняя неделя файла';
+  const extra = [
+    ['Медианная цена', cmpNum(own.median_price, ' ₽')],
+    ['Заказы за неделю', cmpNum(own.week_orders)],
+    ['Конверсия в корзину', cmpNum(own.cart_conv, '%')],
+    ['Конверсия в заказ', cmpNum(own.order_conv, '%')],
+    ['Позиция в поиске', cmpNum(own.search_position)],
+    ['Процент выкупа', cmpNum(own.buyout_pct, '%')],
+  ].map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('');
+  document.getElementById('cmpOut').innerHTML = `<div style="overflow:auto;margin-top:16px">
+    <table class="cmp">
+      <thead><tr>
+        <th>Наш артикул</th>
+        <th>CTR</th>
+        <th>Средний CTR подборки</th>
+        <th colspan="${span}">Конкуренты по убыванию CTR</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td class="cmp-own" onclick="toggleCmpExtra()">${esc(own.vendor_code || own.nm_id)} ▾</td>
+          <td>${ctrPct(own.ctr)}</td>
+          <td>${ctrPct(d.avg_ctr)}</td>
+          ${rivals || '<td style="color:var(--muted)">В подборке никого нет</td>'}
+        </tr>
+        <tr id="cmpExtra" hidden>
+          <td colspan="${3 + span}">
+            <div style="font-size:11px;color:var(--muted);padding:0 16px 6px">${esc(week)}</div>
+            <div class="cmp-list">${extra}</div>
+          </td>
+        </tr>
+      </tbody>
     </table>
   </div>`;
 }

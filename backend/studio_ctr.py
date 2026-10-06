@@ -1003,7 +1003,11 @@ def compare_with_top(board: dict, nm_id: int) -> dict:
     priced = []
     for product in products:
         nm = _as_int(product.get("nm_id"))
-        if not nm or nm == nm_id:
+        if not nm:
+            continue
+        if nm == nm_id:
+            if product.get("position"):
+                own["search_position"] = product.get("position")
             continue
         if nm in own_ids:
             skipped["own"] += 1
@@ -1395,6 +1399,54 @@ def ctr_ads(request: Request, body: dict):
     return {"days": days, "with_ads": with_ads, "own": cards}
 
 
+def _week_snapshot(nm_id: int) -> dict:
+    """Последний недельный файл, где есть эта карточка: цена, заказы, конверсии, позиция, выкуп."""
+    rows = _sb_get(
+        "competitor_metrics?nm_id=eq."
+        f"{nm_id}&select=session_id,median_price,orders,cart_conv,order_conv,avg_position,buyout_pct"
+    )
+    if not rows:
+        return {}
+    rows.sort(key=lambda row: _as_int(row.get("session_id")) or 0, reverse=True)
+    row = rows[0]
+    sessions = _sb_get("competitor_sessions?select=id,period_begin,period_end")
+    sess = next((s for s in sessions if _as_int(s.get("id")) == _as_int(row.get("session_id"))), {})
+    begin = sess.get("period_begin") or ""
+    end = sess.get("period_end") or ""
+    label = f"{begin} – {end}" if begin and end else ""
+    return {
+        "median_price": row.get("median_price"),
+        "week_orders": row.get("orders"),
+        "cart_conv": row.get("cart_conv"),
+        "order_conv": row.get("order_conv"),
+        "file_position": row.get("avg_position"),
+        "buyout_pct": row.get("buyout_pct"),
+        "week_label": label,
+    }
+
+
+def _finish_compare(result: dict) -> dict:
+    own = result.get("own") or {}
+    nm_id = _as_int(own.get("nm_id"))
+    if nm_id:
+        snap = _week_snapshot(nm_id)
+        for key in ("median_price", "week_orders", "cart_conv", "order_conv", "buyout_pct", "week_label"):
+            own[key] = snap.get(key)
+        if own.get("search_position") is None:
+            own["search_position"] = snap.get("file_position")
+    matches = list(result.get("matches") or [])
+    matches.sort(key=lambda row: (
+        0 if row.get("ctr") is not None else 1,
+        -(float(row["ctr"]) if row.get("ctr") is not None else 0),
+        row.get("position") or 999,
+    ))
+    ctrs = [float(row["ctr"]) for row in matches if row.get("ctr") is not None]
+    result["matches"] = matches
+    result["avg_ctr"] = round(sum(ctrs) / len(ctrs), 2) if ctrs else None
+    result["own"] = own
+    return result
+
+
 @router.post("/compare")
 def studio_compare(request: Request, body: dict):
     _user(request)
@@ -1404,4 +1456,4 @@ def studio_compare(request: Request, body: dict):
     if not nm_id:
         raise HTTPException(status_code=400, detail="nm_id required")
     board = load_board(30)
-    return compare_with_top(board, nm_id)
+    return _finish_compare(compare_with_top(board, nm_id))
