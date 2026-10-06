@@ -811,7 +811,9 @@ def _search_rows(query: str, limit: int = 50) -> dict:
             })
             if len(rows) >= limit:
                 break
-        return {"products": rows, "error": None}
+        if rows:
+            return {"products": rows, "error": None}
+        last_err = last_err or "empty"
     return {"products": [], "error": last_err}
 
 
@@ -917,12 +919,25 @@ def compare_with_top(board: dict, nm_id: int) -> dict:
             "own": own,
             "matches": [],
         }
-    if own["price"] is None:
-        return {"ok": False, "reason": "Нет цены для клиента на витрине WB.", "own": own, "matches": []}
 
     query = _query_for_shape(own["shape"])
     live = _search_rows(query, limit=50)
     products = live.get("products") or []
+    if own["price"] is None:
+        hit = next((row for row in products if row["nm_id"] == nm_id and row.get("price") is not None), None)
+        if hit is None and own.get("name"):
+            by_name = _search_rows(own["name"], limit=50)
+            hit = next((row for row in by_name.get("products") or [] if row["nm_id"] == nm_id and row.get("price") is not None), None)
+        if hit is not None:
+            own["price"] = int(round(float(hit["price"])))
+    if own["price"] is None:
+        err = live.get("error") or ""
+        return {
+            "ok": False,
+            "reason": "Нет цены для клиента на витрине WB." + (f" {err}" if err else ""),
+            "own": own,
+            "matches": [],
+        }
     if not products:
         return {
             "ok": False,
