@@ -11,7 +11,7 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --wb-purple:#D4622A;--wb-purple-dark:#4A4540;--wb-purple-light:#FFF0E8;
+  --wb-purple:#D4622A;--wb-purple-dark:#4A4540;--wb-purple-light:#FFF0E8;--wb-orange:#D4622A;
   --wb-bg:#F5F3F0;--wb-surface:#FFFFFF;--wb-border:#E2DDD8;
   --wb-text:#1A1816;--wb-muted:#6B6560;--wb-faint:#A09890;
   --green:#12B76A;--red:#F04438;--amber:#F79009;--blue:#2E90FA;
@@ -363,6 +363,19 @@ td.tc{text-align:center}
 .comp-tbl{width:100%;border-collapse:collapse;font-size:12px}
 .comp-period-btn{padding:5px 12px;border-radius:20px;border:1px solid var(--wb-border);font-size:12px;color:var(--wb-muted);cursor:pointer;background:var(--wb-bg);font-family:inherit;white-space:normal;text-align:left;line-height:1.35;max-width:280px}
 .comp-period-btn.on{background:var(--wb-purple);color:#fff;border-color:var(--wb-purple)}
+.comp-week{background:var(--wb-surface);border:1px solid var(--wb-border);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+.comp-week-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.comp-week-title{font-size:14px;font-weight:700;color:var(--wb-text)}
+.comp-week-all{border:none;background:none;cursor:pointer;font-size:12px;color:var(--wb-orange);padding:0;font-family:inherit;white-space:nowrap}
+.comp-week-all:hover{text-decoration:underline}
+.comp-week-chips{display:flex;flex-wrap:wrap;gap:8px}
+.comp-week-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px 6px 12px;border-radius:8px;border:1px solid var(--wb-border);background:#fff;font-size:12px;color:var(--wb-text);cursor:pointer;font-family:inherit;line-height:1.2;max-width:260px}
+.comp-week-chip:hover{border-color:#cfc8bf}
+.comp-week-chip.on{background:var(--wb-orange);border-color:var(--wb-orange);color:#fff}
+.comp-week-chip .chip-x{border:none;background:none;cursor:pointer;color:inherit;opacity:.55;font-size:13px;padding:0 0 0 2px;line-height:1;font-family:inherit}
+.comp-week-chip .chip-x:hover{opacity:1}
+.comp-week-chip.on .chip-x{opacity:.8}
+.comp-week-empty{font-size:12px;color:var(--wb-faint)}
 .comp-art-check{display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;border:1px solid var(--wb-border);cursor:pointer;font-size:12px;background:var(--wb-bg);user-select:none}
 .comp-art-check.on{background:var(--wb-purple-light);border-color:var(--wb-purple)}
 .comp-art-check.own{border-color:var(--wb-purple);font-weight:600}
@@ -483,45 +496,6 @@ td.tc{text-align:center}
 .spp-chart-legend{display:flex;gap:16px;font-size:12px;color:var(--wb-muted);margin-bottom:4px}
 .spp-chart-legend i{display:inline-block;width:18px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
 .spp-chart-empty{padding:48px 16px;text-align:center;color:var(--wb-muted);font-size:13px}
-
-.vis-winner{background:var(--wb-surface);border:1px solid var(--wb-purple);border-radius:var(--r);padding:16px 18px;margin-bottom:18px}
-.vis-winner h3{font-size:15px;font-weight:600;margin:0 0 8px}
-.vis-winner ul{margin:0;padding-left:18px;color:var(--wb-muted);font-size:13px;line-height:1.5}
-.vis-winner li{margin:3px 0}
-.vis-holes{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
-.vis-hole{background:var(--wb-surface);border:1px solid var(--wb-border);border-radius:var(--r);padding:12px 14px;font-size:13px;line-height:1.45}
-.vis-concepts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
-.vis-concept{background:var(--wb-surface);border:1px solid var(--wb-border);border-radius:var(--r);padding:14px;cursor:pointer;text-align:left;font-family:inherit;color:inherit}
-.vis-concept:hover{border-color:var(--wb-purple)}
-.vis-concept.on{border-color:var(--wb-purple);background:var(--wb-purple-light)}
-.vis-concept h4{font-size:13px;font-weight:600;margin-bottom:6px}
-.vis-concept p{font-size:12px;color:var(--wb-muted);line-height:1.4;margin:0 0 8px}
-.vis-swatch{display:inline-block;width:14px;height:14px;border-radius:4px;border:1px solid var(--wb-border);vertical-align:middle;margin-right:4px}
-.vis-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
-.vis-card{background:var(--wb-surface);border:1px solid var(--wb-border);border-radius:var(--r);overflow:hidden;position:relative}
-.vis-card.top{border-color:var(--wb-purple)}
-.vis-card img{width:100%;aspect-ratio:3/4;object-fit:cover;display:block;background:#F0EDE8}
-.vis-card-meta{padding:8px 8px 10px}
-.vis-card-meta .pos{font-size:10px;color:var(--wb-faint);font-weight:600}
-.vis-card-meta .nm{font-size:11px;color:var(--wb-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.vis-score{position:absolute;top:6px;right:6px;background:rgba(26,24,22,.82);color:#fff;font-size:10px;font-weight:600;padding:3px 6px;border-radius:4px}
-.vis-score.hi{background:#12B76A}
-.vis-score.mid{background:#F79009}
-.vis-studio{display:grid;grid-template-columns:360px 1fr;gap:24px;align-items:start;margin-top:8px}
-.vis-canvas-wrap{background:#1A1816;border-radius:var(--r);padding:16px;display:flex;justify-content:center}
-#visCanvas{width:270px;height:360px;background:#fff;display:block}
-.vis-form{display:flex;flex-direction:column;gap:10px}
-.vis-form label{font-size:11px;font-weight:600;color:var(--wb-muted);text-transform:uppercase;letter-spacing:.3px}
-.vis-form input[type=text],.vis-form input[type=color],.vis-form textarea{
-  border:1px solid var(--wb-border);border-radius:var(--rs);padding:7px 10px;font-size:13px;font-family:inherit;width:100%;background:#fff
-}
-.vis-form textarea{min-height:64px;resize:vertical}
-.vis-note{font-size:12px;color:var(--wb-muted);line-height:1.45;margin:0 0 14px}
-@media(max-width:1100px){
-  .vis-stats,.vis-concepts{grid-template-columns:1fr 1fr}
-  .vis-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
-  .vis-studio{grid-template-columns:1fr}
-}
 </style>
 </head>
 <body>
@@ -537,7 +511,6 @@ td.tc{text-align:center}
     <div class="tb-nav-item" onclick="showSection('supplies',this)">Остатки и поставки</div>
     <div class="tb-nav-item" onclick="showSection('analytics',this)">Конкуренты</div>
     <div class="tb-nav-item" onclick="showSection('positions',this)">Позиции</div>
-    <div class="tb-nav-item" onclick="showSection('visual',this)">Визуал</div>
     <div class="tb-nav-item" onclick="showSection('ads',this)">Продвижение</div>
     <div class="tb-nav-item" onclick="showSection('finance',this)">Финансы</div>
   </div>
@@ -737,13 +710,16 @@ td.tc{text-align:center}
 <div class="page" id="page-delivery-coverage">
   <div class="section-wrap" style="padding-bottom:8px">
     <div class="section-title">Новые остатки</div>
-    <div class="section-sub">Срок как у клиента на витрине. Зелёный — завтра, жёлтый — послезавтра, красный — остальные дни.</div>
+    <div class="section-sub">Как видит клиент на витрине: срок доставки и остаток с карточки. Цвет: зелёный — сегодня/завтра · жёлтый — послезавтра · красный — дальше.</div>
   </div>
   <div class="toolbar" style="align-items:center;flex-wrap:wrap;gap:10px">
-    <button class="action-btn primary" id="dcRunBtn" onclick="runDeliveryCoverage()">↻ Обновить</button>
-    <span id="dcInfo" style="font-size:12px;color:var(--wb-muted)">зелёный — завтра · жёлтый — послезавтра · красный — остальные</span>
+    <button class="action-btn primary" id="dcCaptureBtn" onclick="copyDeliveryCaptureScript()">① Снять в Chrome</button>
+    <button class="action-btn" id="dcLoadBtn" onclick="loadDeliveryCoverageSnapshot()">② Показать снимок</button>
+    <button class="action-btn" id="dcRunBtn" onclick="runDeliveryCoverage()" title="С сервера — часто 403">Сервер</button>
+    <span id="dcInfo" style="font-size:12px;color:var(--wb-muted)">съём из твоего Chrome, без cookie</span>
   </div>
-  <div id="dcRoot"><div class="empty" style="padding:40px 20px">Нажми «Обновить», чтобы загрузить остатки по городам</div></div>
+  <div id="dcHint" style="display:none;margin:0 16px 8px;padding:10px 12px;border-radius:8px;background:#fff4e5;color:#8a4b08;font-size:13px;line-height:1.4"></div>
+  <div id="dcRoot"><div class="empty" style="padding:40px 20px">Нажми «Снять в Chrome» — скрипт скопируется. Вставь его в Console на странице WB.</div></div>
 </div>
 
 <div class="page" id="page-own-warehouse">
@@ -888,10 +864,16 @@ td.tc{text-align:center}
         <div id="ownArtChips" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"></div>
       </div>
 
-      <!-- Периоды (мультивыбор) -->
-      <div>
-        <div style="font-size:11px;font-weight:600;color:var(--wb-muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Периоды конкурентов <span style="font-weight:400;text-transform:none">(можно несколько)</span></div>
-        <div id="compPeriodBtns" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      <!-- Периоды (мультивыбор), разбивка по неделям -->
+      <div style="flex:1;min-width:320px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:600;color:var(--wb-muted);text-transform:uppercase;letter-spacing:.3px">Периоды конкурентов <span style="font-weight:400;text-transform:none">(можно несколько)</span></div>
+          <div style="display:flex;gap:12px;font-size:12px">
+            <button type="button" onclick="selectAllCompPeriods()" style="border:none;background:none;cursor:pointer;color:var(--wb-orange);padding:0;font-family:inherit">Отметить все периоды</button>
+            <button type="button" onclick="archiveOldCompPeriods()" style="border:none;background:none;cursor:pointer;color:var(--wb-muted);padding:0;font-family:inherit">В архив старые</button>
+          </div>
+        </div>
+        <div id="compPeriodBtns"></div>
       </div>
     </div>
   </div>
@@ -973,7 +955,8 @@ td.tc{text-align:center}
     <span style="font-size:13px;font-weight:600">Полки у конкурентов</span>
     <span style="font-size:12px;color:var(--wb-muted);margin-left:10px">«Смотрите также» · топ-15</span>
     <div class="ml-auto" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="action-btn" id="shelfRefreshBtn" onclick="refreshActiveShelf()" disabled>↻ Обновить полку</button>
+      <button class="action-btn primary" id="shelfCaptureBtn" onclick="copyShelfCaptureScript('competitors')">① Снять в Chrome</button>
+      <button class="action-btn" id="shelfRefreshBtn" onclick="refreshActiveShelf()" disabled>↻ Показать снимок</button>
     </div>
   </div>
 
@@ -1000,7 +983,7 @@ td.tc{text-align:center}
       <div style="font-size:11px;font-weight:600;color:var(--wb-muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Сохранённые конкуренты</div>
       <div id="shelfCompChips" style="display:flex;gap:8px;flex-wrap:wrap;min-height:32px"></div>
     </div>
-    <div id="shelfStatus" style="margin-top:10px;font-size:12px;color:var(--wb-muted)">Впиши nmID конкурента — сайт запомнит и покажет топ-15 полки «Смотрите также»</div>
+    <div id="shelfStatus" style="margin-top:10px;font-size:12px;color:var(--wb-muted)">Сервер WB режет полки (498). Сними в Chrome — как «новые остатки»: F12 → Console → вставь скрипт</div>
   </div>
 
   <div id="shelfRoot" style="overflow:auto">
@@ -1015,7 +998,8 @@ td.tc{text-align:center}
     <span style="font-size:12px;color:var(--wb-muted);margin-left:10px">«Смотрите также» · топ-15 · доли брендов</span>
     <div class="ml-auto" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="action-btn" id="myShelfLoadAllBtn" onclick="loadAllMyShelfCards()">↓ С продажами</button>
-      <button class="action-btn" id="myShelfRefreshBtn" onclick="refreshActiveMyShelf()" disabled>↻ Обновить полку</button>
+      <button class="action-btn primary" id="myShelfCaptureBtn" onclick="copyShelfCaptureScript('mine')">① Снять в Chrome</button>
+      <button class="action-btn" id="myShelfRefreshBtn" onclick="refreshActiveMyShelf()" disabled>↻ Показать снимок</button>
     </div>
   </div>
 
@@ -1047,90 +1031,11 @@ td.tc{text-align:center}
       <div style="font-size:11px;font-weight:600;color:var(--wb-muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Мои карточки · 📌 закрепить · ⋮⋮ перетащить</div>
       <div id="myShelfChips" style="display:flex;gap:8px;flex-wrap:wrap;min-height:32px;align-items:center"></div>
     </div>
-    <div id="myShelfStatus" style="margin-top:10px;font-size:12px;color:var(--wb-muted)">Только карточки с заказами/выкупами за окно поставок · клик — топ-15 полки и доли конкурентов</div>
+    <div id="myShelfStatus" style="margin-top:10px;font-size:12px;color:var(--wb-muted)">Сервер WB режет полки. Сними в Chrome, потом «Показать снимок»</div>
   </div>
 
   <div id="myShelfRoot" style="overflow:auto">
     <div class="empty" style="padding:40px 20px">Выбери свою карточку, чтобы увидеть полку «Смотрите также»</div>
-  </div>
-</div>
-
-<!-- ВИЗУАЛ ГЛАВНОГО СЛАЙДА -->
-<div class="page" id="page-visual">
-  <div class="toolbar">
-    <span style="font-size:13px;font-weight:600">Главный слайд против топ-50</span>
-    <span style="font-size:12px;color:var(--wb-muted);margin-left:10px">места 1–50 · один слайд, который должен кликаться лучше сетки</span>
-    <div class="ml-auto" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="action-btn primary" id="visRunBtn" onclick="runVisualSerp()">Сделать главный слайд</button>
-    </div>
-  </div>
-
-  <div style="padding:12px 20px 10px;border-bottom:1px solid var(--wb-border);background:var(--wb-surface)">
-    <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
-      <div>
-        <div style="font-size:11px;font-weight:600;color:var(--wb-muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Поисковый запрос</div>
-        <input id="visQuery" list="visQueryList" placeholder="смарт часы мужские" value="смарт часы мужские"
-          style="border:1px solid var(--wb-border);border-radius:var(--rs);padding:6px 10px;font-size:12px;font-family:inherit;width:280px"
-          onkeydown="if(event.key==='Enter') runVisualSerp()">
-        <datalist id="visQueryList"></datalist>
-      </div>
-      <div>
-        <div style="font-size:11px;font-weight:600;color:var(--wb-muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Город</div>
-        <select id="visCity"
-          style="border:1px solid var(--wb-border);border-radius:var(--rs);padding:6px 10px;font-size:12px;font-family:inherit;min-width:180px;background:#fff">
-          <option value="-1257786">Москва</option>
-        </select>
-      </div>
-      <div>
-        <div style="font-size:11px;font-weight:600;color:var(--wb-muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Твои часы · артикул WB</div>
-        <div style="display:flex;gap:8px">
-          <input id="visOwnNm" placeholder="nmID, напр. 960039726" inputmode="numeric"
-            style="border:1px solid var(--wb-border);border-radius:var(--rs);padding:6px 10px;font-size:12px;font-family:inherit;width:200px"
-            onkeydown="if(event.key==='Enter') visUseNmPhoto()">
-          <button class="action-btn" onclick="visUseNmPhoto()">Подставить фото</button>
-        </div>
-      </div>
-    </div>
-    <div id="visStatus" style="margin-top:10px;font-size:12px;color:var(--wb-muted)">Ключ → разбор мест 1–50 → один слайд 900×1200, который должен выигрывать клик</div>
-  </div>
-
-  <div style="padding:20px 24px 40px">
-    <p class="vis-note" id="visNote">Система смотрит главные слайды топ-50 и CTR из «Сравнение карточек», затем собирает один кадр, который контрастирует с сеткой. Подставь фото своих часов — скачаешь готовый PNG.</p>
-    <div id="visWinner"></div>
-    <div id="visStudioBlock" style="margin-bottom:28px">
-      <div style="font-size:13px;font-weight:600;margin-bottom:4px">Побеждающий слайд · 900×1200</div>
-      <div style="font-size:12px;color:var(--wb-muted);margin-bottom:14px">После разбора шаблон и цвета ставятся сами. Можно поправить текст и скачать.</div>
-      <div class="vis-studio">
-        <div class="vis-canvas-wrap"><canvas id="visCanvas" width="900" height="1200"></canvas></div>
-        <div class="vis-form">
-          <label>Фото товара (или артикул сверху)</label>
-          <input type="file" id="visPhoto" accept="image/*" onchange="visOnPhoto(this.files[0])">
-          <label>Заголовок</label>
-          <input type="text" id="visHeadline" maxlength="42" oninput="visDrawStudio()" placeholder="AMOLED · 7 дней">
-          <label>Подзаголовок</label>
-          <input type="text" id="visSub" maxlength="64" oninput="visDrawStudio()" placeholder="Мужские смарт-часы">
-          <div style="display:flex;gap:12px">
-            <div style="flex:1"><label>Фон</label><input type="color" id="visBg" value="#12141A" oninput="visDrawStudio()"></div>
-            <div style="flex:1"><label>Текст</label><input type="color" id="visFg" value="#F7F4F0" oninput="visDrawStudio()"></div>
-            <div style="flex:1"><label>Акцент</label><input type="color" id="visAccent" value="#D4622A" oninput="visDrawStudio()"></div>
-          </div>
-          <label>Шаблон</label>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button type="button" class="filter-btn on" id="visTplStudio" onclick="visSetTpl('studio')">Студия</button>
-            <button type="button" class="filter-btn" id="visTplWrist" onclick="visSetTpl('wrist')">На запястье</button>
-            <button type="button" class="filter-btn" id="visTplSplit" onclick="visSetTpl('split')">Фото + оффер</button>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
-            <button class="action-btn primary" onclick="visDownloadPng()">Скачать PNG 900×1200</button>
-            <button class="action-btn" onclick="visCopyBrief()">Копировать бриф</button>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div id="visStats"></div>
-    <div id="visHoles"></div>
-    <div id="visConcepts"></div>
-    <div id="visGrid"></div>
   </div>
 </div>
 
@@ -1264,7 +1169,6 @@ const PAGE_SECTION = {
   positions: 'positions',
   shelves: 'positions',
   'my-shelves': 'positions',
-  visual: 'visual',
   ads: 'ads',
   finance: 'finance',
 };
@@ -1277,7 +1181,6 @@ const SECTION_DEFAULT_PAGE = {
   ads: 'ads',
   analytics: 'competitors',
   positions: 'positions',
-  visual: 'visual',
   finance: 'finance',
 };
 
@@ -1345,7 +1248,6 @@ function showPage(id, btn) {
   if(id === 'positions') renderPositionsPage();
   if(id === 'shelves') renderShelvesPage();
   if(id === 'my-shelves') renderMyShelvesPage();
-  if(id === 'visual') renderVisualPage();
   if(id === 'finance') renderFinance();
 }
 
@@ -2057,30 +1959,215 @@ function saveDeliveryCoverageCache(data) {
 }
 
 function initDeliveryCoveragePage() {
+  setDcHint(
+    'Сервер WB режет (403). Рабочий путь: ① Снять в Chrome → на wildberries.ru F12 → Console → Ctrl+V → Enter → дождись «Готово» → ② Показать снимок.'
+  );
   if(!DC_LAST) DC_LAST = loadDeliveryCoverageCache();
   if(DC_LAST) {
     renderDeliveryCoverage(DC_LAST);
     const info = document.getElementById('dcInfo');
     const when = DC_LAST.updated_at ? new Date(DC_LAST.updated_at).toLocaleString('ru-RU') : '';
     if(info) info.textContent = when
-      ? `Сохранено с ${when} · нажми «Обновить» для свежих данных`
-      : 'зелёный — завтра · жёлтый — послезавтра · красный — остальные';
-    return;
+      ? `Снимок ${when} · обновляю с сервера…`
+      : 'зелёный — сегодня/завтра · жёлтый — послезавтра · красный — дальше';
+  } else {
+    const root = document.getElementById('dcRoot');
+    if(root) root.innerHTML = `<div class="empty" style="padding:40px 20px">Загрузка снимка…</div>`;
   }
-  const root = document.getElementById('dcRoot');
-  if(root) root.innerHTML = `<div class="empty" style="padding:40px 20px">Нажми «Обновить», чтобы загрузить остатки по городам</div>`;
+  // Всегда тянем актуальный снимок с сервера — localStorage часто устаревает.
+  loadDeliveryCoverageSnapshot();
+}
+
+function buildDeliveryCaptureScript(apiBase, job) {
+  const payload = JSON.stringify({
+    api: apiBase,
+    articles: job.articles || [],
+    cities: job.cities || [],
+    spa: job.spa_version || '14.25.3',
+  });
+  return `(() => {
+const JOB = ${payload};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const log = (...a) => console.log('[новые остатки]', ...a);
+(async () => {
+  try {
+    if (!location.hostname.includes('wildberries.ru')) {
+      alert('Открой страницу wildberries.ru и вставь скрипт снова');
+      return;
+    }
+    const api = JOB.api;
+    const arts = JOB.articles || [];
+    const cities = JOB.cities || [];
+    if (!arts.length || !cities.length) throw new Error('пустое задание');
+    log('старт', arts.length, 'арт ×', cities.length, 'городов');
+    const items = [];
+    let done = 0;
+    const total = arts.length * cities.length;
+    for (const art of arts) {
+      const cells = [];
+      for (const city of cities) {
+        const dests = (city.dest_candidates && city.dest_candidates.length)
+          ? city.dest_candidates : (city.dest != null ? [city.dest] : []);
+        let cell = { city_id: city.id, dest: dests[0] || city.dest, error: 'no dest' };
+        let best = null;
+        for (const dest of dests) {
+          const qs = new URLSearchParams({
+            appType: '1', curr: 'rub', dest: String(dest), spp: '30',
+            nm: String(art.nm_id), lang: 'ru', ab_testing: 'false',
+            hide_vflags: '4294967296', hide_dflags: '1048576', mtype: '257'
+          });
+          const url = '/__internal/u-card/cards/v4/detail?' + qs.toString();
+          try {
+            const deviceid = (function(){
+              try {
+                const id = localStorage.getItem('deviceId') || localStorage.getItem('device_id') || '';
+                if(!id) return '';
+                return id.indexOf('site_')===0 ? id : ('site_'+id);
+              } catch(e){ return ''; }
+            })();
+            const headers = {
+              'x-requested-with': 'XMLHttpRequest',
+              'x-spa-version': JOB.spa || '14.25.3',
+              'Accept': '*/*'
+            };
+            if(deviceid) headers.deviceid = deviceid;
+            const r = await fetch(url, { credentials: 'include', headers });
+            if (!r.ok) {
+              cell = { city_id: city.id, dest, error: 'http ' + r.status, source: 'u-card' };
+              continue;
+            }
+            const j = await r.json();
+            const product = (j.products || [])[0];
+            if (!product) {
+              cell = { city_id: city.id, dest, error: 'product not found', source: 'u-card' };
+              continue;
+            }
+            const t1 = Number(product.time1) || 0;
+            const t2 = product.time2 != null ? Number(product.time2) : null;
+            const hours = t2 != null ? t1 + t2 : null;
+            let qty = 0;
+            const stocks = (product.sizes || []).flatMap(sz => sz.stocks || []);
+            const serving = stocks.find(s => s.wh === product.wh);
+            if (serving) qty = Number(serving.qty) || 0;
+            else qty = Number(product.totalQuantity) || 0;
+            if (hours != null && hours <= 0 && !qty) {
+              cell = { city_id: city.id, dest, error: 'empty dest', source: 'u-card' };
+              continue;
+            }
+            const score = (qty > 0 ? 1 : 0) * 1e9 - (hours != null && hours > 0 ? hours : 1e6);
+            if (!best || score > best.score) {
+              best = { score, cell: { city_id: city.id, dest, product, source: 'u-card' } };
+            }
+            if (qty > 0 && hours != null && hours > 0) {
+              // уже хороший ответ — можно не перебирать все dest
+              break;
+            }
+          } catch (e) {
+            cell = { city_id: city.id, dest, error: String(e).slice(0, 120), source: 'u-card' };
+          }
+        }
+        if (best) cell = best.cell;
+        cells.push(cell);
+        done++;
+        if (done % 10 === 0) log(done + '/' + total);
+        await sleep(40);
+      }
+      items.push({ nm_id: art.nm_id, vendor_code: art.vendor_code || '', cells });
+    }
+    log('отправка на дашборд…');
+    const resp = await fetch(api + '/api/delivery-coverage/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cities, items })
+    });
+    const out = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(out.detail || out.error || ('HTTP ' + resp.status));
+    const ok = (out.items || []).reduce((n, it) => n + (it.cells || []).filter(c => !c.error).length, 0);
+    alert('Готово: ' + ok + ' ячеек. Вернись в дашборд → «② Показать снимок»');
+    log('готово', out.updated_at);
+  } catch (e) {
+    console.error(e);
+    alert('Ошибка съёма: ' + (e && e.message ? e.message : e));
+  }
+})();
+})();`;
+}
+
+async function copyDeliveryCaptureScript() {
+  const info = document.getElementById('dcInfo');
+  const btn = document.getElementById('dcCaptureBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Готовим…'; }
+  try {
+    const apiBase = RAILWAY_URL || (location.origin || '');
+    const r = await fetch(`${apiBase}/api/delivery-coverage/browser-job`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const job = await r.json();
+    job.api_base = apiBase;
+    const script = buildDeliveryCaptureScript(apiBase, job);
+    await navigator.clipboard.writeText(script);
+    const firstNm = (job.articles && job.articles[0] && job.articles[0].nm_id) || 758673912;
+    setDcHint(
+      'Скрипт в буфере. Открой https://www.wildberries.ru/catalog/' + firstNm +
+      '/detail.aspx → F12 → Console → Ctrl+V → Enter. Дождись «Готово», потом кнопку ②.'
+    );
+    if (info) info.textContent = 'Скрипт скопирован · вставь в Console на WB';
+    window.open('https://www.wildberries.ru/catalog/' + firstNm + '/detail.aspx', '_blank');
+  } catch (e) {
+    if (info) info.textContent = 'Не удалось: ' + (e.message || e);
+    alert('Не удалось скопировать скрипт: ' + (e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '① Снять в Chrome'; }
+  }
+}
+
+async function loadDeliveryCoverageSnapshot() {
+  const info = document.getElementById('dcInfo');
+  const btn = document.getElementById('dcLoadBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Загрузка…'; }
+  try {
+    const apiBase = RAILWAY_URL || '';
+    const r = await fetch(`${apiBase}/api/delivery-coverage/cached`);
+    const d = await r.json();
+    if (!r.ok || d.ok === false) throw new Error(d.error || d.detail || ('HTTP ' + r.status));
+    DC_LAST = d;
+    saveDeliveryCoverageCache(d);
+    renderDeliveryCoverage(d);
+    const when = d.updated_at ? new Date(d.updated_at).toLocaleString('ru-RU') : 'сейчас';
+    const ageH = d.updated_at ? ((Date.now() - Date.parse(d.updated_at)) / 3600000) : 0;
+    if (info) info.textContent = `Снимок ${when} · источник: ${d.source || 'browser'}`;
+    setDcHint(ageH > 6
+      ? `Снимку больше ${Math.round(ageH)} ч — лучше снять заново (① Снять в Chrome). Зелёный — сегодня/завтра · жёлтый — послезавтра · красный — дальше.`
+      : 'Зелёный — сегодня/завтра · жёлтый — послезавтра · красный — дальше.');
+  } catch (e) {
+    if (info) info.textContent = 'Нет снимка: ' + (e.message || e);
+    setDcHint('Сначала ① Снять в Chrome (вставь скрипт в Console на WB и дождись «Готово»).');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '② Показать снимок'; }
+  }
+}
+
+async function promptWbSiteCookie() {
+  alert('Cookie больше не нужен. Жми «① Снять в Chrome».');
+}
+
+function setDcHint(text) {
+  const el = document.getElementById('dcHint');
+  if(!el) return;
+  if(!text) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = 'block';
+  el.textContent = text;
 }
 
 async function runDeliveryCoverage() {
   const info = document.getElementById('dcInfo');
   const root = document.getElementById('dcRoot');
   const btn = document.getElementById('dcRunBtn');
-  if(btn) { btn.disabled = true; btn.textContent = 'Обновляем…'; }
+  if(btn) { btn.disabled = true; btn.textContent = 'Сервер…'; }
   const keep = root && DC_LAST && root.querySelector('table.matrix');
   if(!keep && root) {
-    root.innerHTML = `<div class="loading"><div class="spinner"></div><span>Опрашиваем витрину WB… обычно 20–40 сек</span></div>`;
+    root.innerHTML = `<div class="loading"><div class="spinner"></div><span>Опрашиваем витрину с сервера… часто 403</span></div>`;
   }
-  if(info) info.textContent = 'Опрос витрины WB… обычно 20–40 сек';
+  if(info) info.textContent = 'Серверный опрос… если 403 — снимай в Chrome';
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 180000);
@@ -2097,13 +2184,15 @@ async function runDeliveryCoverage() {
     saveDeliveryCoverageCache(d);
     renderDeliveryCoverage(d);
     const when = d.updated_at ? new Date(d.updated_at).toLocaleString('ru-RU') : 'сейчас';
-    if(info) info.textContent = `Обновлено ${when} · зелёный — завтра · жёлтый — послезавтра · красный — остальные`;
+    if(info) info.textContent = `Обновлено ${when} · зелёный — сегодня/завтра · жёлтый — послезавтра · красный — дальше`;
+    setDcHint(d.hint || '');
   } catch(e) {
     const msg = e.name === 'AbortError' ? 'таймаут — попробуй ещё раз' : (e.message||String(e));
     if(info) info.textContent = 'Ошибка: ' + msg;
     if(!keep && root) root.innerHTML = `<div class="empty" style="padding:40px 20px">Ошибка: ${escapeHtml(msg)}</div>`;
+    setDcHint('Сервер не смог. Используй «① Снять в Chrome».');
   } finally {
-    if(btn) { btn.disabled = false; btn.textContent = '↻ Обновить'; }
+    if(btn) { btn.disabled = false; btn.textContent = 'Сервер'; }
   }
 }
 
@@ -2136,7 +2225,7 @@ function buyerDeliveryLabel(hours) {
 }
 
 function deliveryColorByLabel(label) {
-  if(label === 'завтра') return 'ok';
+  if(label === 'сегодня' || label === 'завтра') return 'ok';
   if(label === 'послезавтра') return 'warn';
   return 'bad';
 }
@@ -2158,14 +2247,17 @@ function renderDeliveryCoverage(data) {
       let color = 'none';
       const when = (c.hours != null) ? buyerDeliveryLabel(c.hours) : '';
       if(c.error && !c.hours && !c.qty) {
-        inner = `<div class="dc-hrs">err</div>`;
+        const short = /403/.test(c.error) ? '403' : 'err';
+        inner = `<div class="dc-hrs">${short}</div>`;
         color = 'none';
       } else if(sig === 'none' || (!c.qty && c.hours == null)) {
         inner = `<div class="dc-qty">нет</div>`;
         color = 'none';
       } else {
-        const qty = c.qty != null ? c.qty : '—';
+        // Qty/часы — как на витрине у клиента (card), не кабинет продавца.
+        const qty = c.card_qty != null ? c.card_qty : (c.qty != null ? c.qty : '—');
         const hrs = c.hours != null ? `${c.hours}ч` : '—';
+        // Цвет строго по подписи в ячейке — иначе «завтра» бывает жёлтым (42ч ≥ 38).
         color = when ? deliveryColorByLabel(when) : 'bad';
         inner = `<div class="dc-qty">${qty} шт</div><div class="dc-hrs">${hrs}</div>${when ? `<div class="dc-when">${escapeHtml(when)}</div>` : ''}`;
       }
@@ -2173,7 +2265,12 @@ function renderDeliveryCoverage(data) {
         c.city,
         when,
         c.hours != null ? `клиент ${c.hours}ч` : '',
-        c.qty != null ? `${c.qty} шт` : '',
+        (c.card_qty != null ? c.card_qty : c.qty) != null
+          ? `витрина ${c.card_qty != null ? c.card_qty : c.qty} шт`
+          : '',
+        c.seller_qty != null
+          ? `наш склад ${c.seller_qty} шт` + (c.seller_wh ? ` (${c.seller_wh})` : '')
+          : '',
         c.wh_name || (c.wh ? `wh ${c.wh}` : ''),
         (c.nearest_hours != null && c.nearest_hours !== c.hours)
           ? `ближайший склад ${c.nearest_hours}ч (${c.nearest_qty || 0} шт)`
@@ -4639,6 +4736,7 @@ let DYN_CHART = null;
 let DYN_METRIC = 'open_card';
 let COMP_SESSIONS = [];
 let COMP_SELECTED_SESSIONS = new Set();
+let COMP_SELECTED_BRANDS = new Set(JSON.parse(localStorage.getItem('comp_selected_brands') || '[]')); // "periodBegin__periodEnd::brand"
 let COMP_ARCHIVED = new Set(JSON.parse(localStorage.getItem('comp_archived_sessions') || '[]'));
 let COMP_ARCHIVE_OPEN = false;
 let COMP_OWN_ARTICLES = JSON.parse(localStorage.getItem('comp_own_articles') || '[]');
@@ -4660,9 +4758,10 @@ async function renderCompetitors() {
       document.getElementById('compRoot').innerHTML = '<div class="empty" style="padding:40px 20px">Загрузи файл «Сравнение карточек» из WB Partners</div>';
       return;
     }
+    // Крестик на чипе раньше архивировал весь файл — конкуренты свежей недели пропадали.
+    restoreNewestWeekFromArchive();
     const active = COMP_SESSIONS.filter(s => !COMP_ARCHIVED.has(s.id));
-    COMP_SELECTED_SESSIONS = new Set([...COMP_SELECTED_SESSIONS].filter(id => active.find(s => s.id === id)));
-    if(!COMP_SELECTED_SESSIONS.size && active.length) COMP_SELECTED_SESSIONS.add(active[0].id);
+    ensureCompBrandSelection(active);
     buildPeriodButtons();
     if(DAILY_STATS.length) buildDynChart();
     if(COMP_SELECTED_SESSIONS.size) await loadAllSelectedSessions();
@@ -4693,46 +4792,239 @@ function formatCompSessionLabel(s) {
   return `${period} · ${shown}`;
 }
 
+function compSessionChipLabel(s) {
+  const brands = (s.brands || []).filter(Boolean);
+  if(brands.length === 1) return brands[0];
+  if(brands.length > 1) return brands[0] + (brands.length > 1 ? ` +${brands.length - 1}` : '');
+  if(s.filename) {
+    const base = String(s.filename).replace(/\.[^.]+$/, '');
+    return base.length > 28 ? base.slice(0, 27) + '…' : base;
+  }
+  return 'Сессия #' + s.id;
+}
+
+function compPeriodKey(s) {
+  return `${s.period_begin || '?'}__${s.period_end || '?'}`;
+}
+
+function groupCompSessionsByWeek(sessions) {
+  const map = new Map();
+  for(const s of sessions) {
+    const key = compPeriodKey(s);
+    if(!map.has(key)) {
+      map.set(key, {
+        key,
+        period_begin: s.period_begin,
+        period_end: s.period_end,
+        label: formatCompPeriod(s.period_begin, s.period_end),
+        sessions: [],
+        newestUpload: s.uploaded_at || ''
+      });
+    }
+    const g = map.get(key);
+    g.sessions.push(s);
+    if((s.uploaded_at || '') > g.newestUpload) g.newestUpload = s.uploaded_at || '';
+  }
+  return [...map.values()].sort((a, b) => {
+    const ae = a.period_end || a.period_begin || '';
+    const be = b.period_end || b.period_begin || '';
+    if(ae !== be) return be.localeCompare(ae);
+    return (b.newestUpload || '').localeCompare(a.newestUpload || '');
+  });
+}
+
+function restoreNewestWeekFromArchive() {
+  const weeks = groupCompSessionsByWeek(COMP_SESSIONS);
+  if(!weeks[0]) return;
+  let changed = false;
+  for(const s of weeks[0].sessions) {
+    if(COMP_ARCHIVED.delete(s.id)) changed = true;
+  }
+  if(changed) saveArchived();
+}
+
+function weekBrandKey(periodKey, brand) {
+  return `${periodKey}::${brand || ''}`;
+}
+
+function parseWeekBrandKey(key) {
+  const i = String(key).indexOf('::');
+  if(i < 0) return { periodKey: String(key), brand: '' };
+  return { periodKey: key.slice(0, i), brand: key.slice(i + 2) };
+}
+
+function sessionHasBrand(s, brand) {
+  const brands = (s.brands || []).filter(Boolean);
+  if(!brand) return !brands.length;
+  return brands.includes(brand);
+}
+
+function saveCompBrandSelection() {
+  localStorage.setItem('comp_selected_brands', JSON.stringify([...COMP_SELECTED_BRANDS]));
+}
+
+function syncSessionsFromBrandSelection() {
+  const next = new Set();
+  const active = COMP_SESSIONS.filter(s => !COMP_ARCHIVED.has(s.id));
+  for(const key of COMP_SELECTED_BRANDS) {
+    const { periodKey, brand } = parseWeekBrandKey(key);
+    for(const s of active) {
+      if(compPeriodKey(s) === periodKey && sessionHasBrand(s, brand)) next.add(s.id);
+    }
+  }
+  COMP_SELECTED_SESSIONS = next;
+}
+
+function weekChipItems(sessions) {
+  // Один чип на бренд в периоде — файлы с одним брендом не дублируем.
+  const newest = [...sessions].sort((a, b) => (b.uploaded_at || '').localeCompare(a.uploaded_at || ''));
+  const periodKey = newest[0] ? compPeriodKey(newest[0]) : '';
+  const byBrand = new Map();
+  for(const s of newest) {
+    const brands = (s.brands || []).filter(Boolean);
+    const list = brands.length ? brands : [''];
+    for(const brand of list) {
+      if(byBrand.has(brand)) continue;
+      byBrand.set(brand, {
+        periodKey,
+        brand,
+        sessionId: s.id,
+        label: brand || compSessionChipLabel(s),
+        tip: `${formatCompPeriod(s.period_begin, s.period_end)} · ${brand || compSessionChipLabel(s)}`,
+        key: weekBrandKey(periodKey, brand),
+      });
+    }
+  }
+  return [...byBrand.values()].sort((a, b) => a.label.localeCompare(b.label, 'ru'));
+}
+
+function ensureCompBrandSelection(activeSessions) {
+  const weeks = groupCompSessionsByWeek(activeSessions);
+  const validKeys = new Set();
+  for(const w of weeks) {
+    for(const it of weekChipItems(w.sessions)) validKeys.add(it.key);
+  }
+  // Старый формат sessionId::brand больше не валиден — сбросится на всю свежую неделю.
+  COMP_SELECTED_BRANDS = new Set([...COMP_SELECTED_BRANDS].filter(k => validKeys.has(k)));
+  if(!COMP_SELECTED_BRANDS.size && weeks[0]) {
+    weekChipItems(weeks[0].sessions).forEach(it => COMP_SELECTED_BRANDS.add(it.key));
+  }
+  syncSessionsFromBrandSelection();
+  saveCompBrandSelection();
+}
+
 function buildPeriodButtons() {
   const el = document.getElementById('compPeriodBtns');
   if(!el) return;
   const active = COMP_SESSIONS.filter(s => !COMP_ARCHIVED.has(s.id));
   const archived = COMP_SESSIONS.filter(s => COMP_ARCHIVED.has(s.id));
-  const iconBtn = (onclick, title, char, hoverColor) =>
-    `<button onclick="${onclick}" title="${title}" style="border:none;background:none;cursor:pointer;color:var(--wb-faint);font-size:14px;padding:2px 4px" onmouseover="this.style.color='${hoverColor}'" onmouseout="this.style.color='var(--wb-faint)'">${char}</button>`;
+  ensureCompBrandSelection(active);
+  const weeks = groupCompSessionsByWeek(active);
 
-  let html = active.map(s => {
-    const label = formatCompSessionLabel(s);
-    const tip = (s.brands||[]).length ? `${formatCompPeriod(s.period_begin,s.period_end)} · ${(s.brands||[]).join(', ')}` : label;
-    return `
-    <div style="display:flex;align-items:center;gap:2px">
-      <button class="comp-period-btn${COMP_SELECTED_SESSIONS.has(s.id)?' on':''}" onclick="togglePeriod(${s.id})" title="${tip.replace(/"/g,'&quot;')}">
-        ${label}
-      </button>
-      ${iconBtn(`archiveSession(${s.id})`, 'В архив', '📦', 'var(--wb-orange)')}
-      ${iconBtn(`deleteCompSession(${s.id})`, 'Удалить', '✕', 'var(--red)')}
-    </div>`;
-  }).join('');
+  let html = '';
+  if(!weeks.length) {
+    html = `<div class="comp-week-empty">Нет активных периодов — загрузи отчёт или верни из архива</div>`;
+  } else {
+    html = weeks.map(w => {
+      const chips = weekChipItems(w.sessions);
+      const n = chips.length;
+      const allOn = n > 0 && chips.every(c => COMP_SELECTED_BRANDS.has(c.key));
+      const chipsHtml = chips.map(c => {
+        const on = COMP_SELECTED_BRANDS.has(c.key);
+        return `<button type="button" class="comp-week-chip${on?' on':''}" onclick='toggleCompWeekBrand(${JSON.stringify(c.periodKey)}, ${JSON.stringify(c.brand)})' title="${escapeHtml(c.tip)}">
+          <span style="overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</span>
+        </button>`;
+      }).join('');
+      return `<div class="comp-week">
+        <div class="comp-week-head">
+          <div class="comp-week-title">${escapeHtml(w.label)}</div>
+          <button type="button" class="comp-week-all" onclick="toggleCompWeek('${w.key.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}', ${allOn ? 'false' : 'true'})">${allOn ? 'снять все' : 'все ' + n}</button>
+        </div>
+        <div class="comp-week-chips">${chipsHtml || '<span class="comp-week-empty">Нет брендов</span>'}</div>
+      </div>`;
+    }).join('');
+  }
 
   if(archived.length) {
     html += `
-      <div style="width:100%;margin-top:4px">
-        <button onclick="toggleArchiveView()" style="border:none;background:none;cursor:pointer;color:var(--wb-muted);font-size:12px;padding:2px 0">
-          🗄 Архив (${archived.length}) ${COMP_ARCHIVE_OPEN?'▲':'▼'}
+      <div style="margin-top:6px">
+        <button type="button" onclick="toggleArchiveView()" style="border:none;background:none;cursor:pointer;color:var(--wb-muted);font-size:12px;padding:2px 0;font-family:inherit">
+          Архив (${archived.length}) ${COMP_ARCHIVE_OPEN ? '▴' : '▾'}
         </button>
-        ${COMP_ARCHIVE_OPEN ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">` + archived.map(s => {
-          const label = formatCompSessionLabel(s);
-          return `
-          <div style="display:flex;align-items:center;gap:2px;opacity:.65">
-            <button class="comp-period-btn" onclick="unarchiveSession(${s.id})" title="Вернуть из архива">
-              ${label} ↩
-            </button>
-            ${iconBtn(`deleteCompSession(${s.id})`, 'Удалить', '✕', 'var(--red)')}
-          </div>`;
-        }).join('') + `</div>` : ''}
+        ${COMP_ARCHIVE_OPEN ? `<div class="comp-week" style="opacity:.75;margin-top:8px">
+          <div class="comp-week-chips">` + archived.map(s => {
+            const label = escapeHtml(compSessionChipLabel(s));
+            const tip = escapeHtml(formatCompSessionLabel(s) + ' · вернуть');
+            return `<button type="button" class="comp-week-chip" onclick="unarchiveSession(${s.id})" title="${tip}">
+              <span style="overflow:hidden;text-overflow:ellipsis">${label}</span>
+              <span class="chip-x" onclick="event.stopPropagation();deleteCompSession(${s.id})" title="Удалить">×</span>
+            </button>`;
+          }).join('') + `</div></div>` : ''}
       </div>`;
   }
   el.innerHTML = html;
+}
+
+async function toggleCompWeekBrand(periodKey, brand) {
+  const key = weekBrandKey(periodKey, brand);
+  if(COMP_SELECTED_BRANDS.has(key)) {
+    if(COMP_SELECTED_BRANDS.size <= 1) return;
+    COMP_SELECTED_BRANDS.delete(key);
+  } else {
+    COMP_SELECTED_BRANDS.add(key);
+  }
+  syncSessionsFromBrandSelection();
+  saveCompBrandSelection();
+  buildPeriodButtons();
+  if(COMP_SELECTED_SESSIONS.size) await loadAllSelectedSessions();
+}
+
+async function toggleCompWeek(periodKey, selectAll) {
+  const active = COMP_SESSIONS.filter(s => !COMP_ARCHIVED.has(s.id) && compPeriodKey(s) === periodKey);
+  const chips = weekChipItems(active);
+  if(!chips.length) return;
+  if(selectAll) chips.forEach(c => COMP_SELECTED_BRANDS.add(c.key));
+  else {
+    chips.forEach(c => COMP_SELECTED_BRANDS.delete(c.key));
+    if(!COMP_SELECTED_BRANDS.size) {
+      const weeks = groupCompSessionsByWeek(COMP_SESSIONS.filter(s => !COMP_ARCHIVED.has(s.id)));
+      if(weeks[0]) weekChipItems(weeks[0].sessions).slice(0, 1).forEach(c => COMP_SELECTED_BRANDS.add(c.key));
+    }
+  }
+  syncSessionsFromBrandSelection();
+  saveCompBrandSelection();
+  buildPeriodButtons();
+  if(COMP_SELECTED_SESSIONS.size) await loadAllSelectedSessions();
+}
+
+async function selectAllCompPeriods() {
+  const active = COMP_SESSIONS.filter(s => !COMP_ARCHIVED.has(s.id));
+  const weeks = groupCompSessionsByWeek(active);
+  for(const w of weeks) weekChipItems(w.sessions).forEach(c => COMP_SELECTED_BRANDS.add(c.key));
+  syncSessionsFromBrandSelection();
+  saveCompBrandSelection();
+  buildPeriodButtons();
+  if(COMP_SELECTED_SESSIONS.size) await loadAllSelectedSessions();
+}
+
+async function archiveOldCompPeriods() {
+  const weeks = groupCompSessionsByWeek(COMP_SESSIONS.filter(s => !COMP_ARCHIVED.has(s.id)));
+  if(weeks.length <= 1) {
+    alert('Старых периодов нет — сейчас только одна неделя');
+    return;
+  }
+  const toArchive = weeks.slice(1).flatMap(w => w.sessions);
+  if(!confirm(`Убрать в архив ${toArchive.length} отчётов старше «${weeks[0].label}»?`)) return;
+  toArchive.forEach(s => {
+    COMP_ARCHIVED.add(s.id);
+    COMP_SELECTED_SESSIONS.delete(s.id);
+  });
+  saveArchived();
+  const active = COMP_SESSIONS.filter(s => !COMP_ARCHIVED.has(s.id));
+  ensureCompBrandSelection(active);
+  buildPeriodButtons();
+  if(COMP_SELECTED_SESSIONS.size) await loadAllSelectedSessions();
+  else document.getElementById('compRoot').innerHTML = '<div class="empty" style="padding:40px 20px">Все файлы в архиве. Верни нужный из архива или загрузи новый.</div>';
 }
 
 function saveArchived() {
@@ -4749,7 +5041,7 @@ async function archiveSession(sessionId) {
   saveArchived();
   COMP_SELECTED_SESSIONS.delete(sessionId);
   const active = COMP_SESSIONS.filter(s => !COMP_ARCHIVED.has(s.id));
-  if(!COMP_SELECTED_SESSIONS.size && active.length) COMP_SELECTED_SESSIONS.add(active[0].id);
+  ensureCompBrandSelection(active);
   buildPeriodButtons();
   if(COMP_SELECTED_SESSIONS.size) await loadAllSelectedSessions();
   else document.getElementById('compRoot').innerHTML = '<div class="empty" style="padding:40px 20px">Все файлы в архиве. Верни нужный из архива или загрузи новый.</div>';
@@ -4758,31 +5050,44 @@ async function archiveSession(sessionId) {
 async function unarchiveSession(sessionId) {
   COMP_ARCHIVED.delete(sessionId);
   saveArchived();
-  COMP_SELECTED_SESSIONS.add(sessionId);
+  const s = COMP_SESSIONS.find(x => x.id === sessionId);
+  if(s) {
+    const weekSessions = COMP_SESSIONS.filter(x => !COMP_ARCHIVED.has(x.id) && compPeriodKey(x) === compPeriodKey(s));
+    weekChipItems(weekSessions).forEach(c => COMP_SELECTED_BRANDS.add(c.key));
+  }
+  syncSessionsFromBrandSelection();
+  saveCompBrandSelection();
   buildPeriodButtons();
   await loadAllSelectedSessions();
 }
 
 async function togglePeriod(sessionId) {
-  if(COMP_SELECTED_SESSIONS.has(sessionId)) {
-    if(COMP_SELECTED_SESSIONS.size <= 1) return;
-    COMP_SELECTED_SESSIONS.delete(sessionId);
+  const s = COMP_SESSIONS.find(x => x.id === sessionId);
+  if(!s) return;
+  const weekSessions = COMP_SESSIONS.filter(x => !COMP_ARCHIVED.has(x.id) && compPeriodKey(x) === compPeriodKey(s));
+  const chips = weekChipItems(weekSessions);
+  const allOn = chips.every(c => COMP_SELECTED_BRANDS.has(c.key));
+  if(allOn) {
+    if(COMP_SELECTED_BRANDS.size <= chips.length) return;
+    chips.forEach(c => COMP_SELECTED_BRANDS.delete(c.key));
   } else {
-    COMP_SELECTED_SESSIONS.add(sessionId);
+    chips.forEach(c => COMP_SELECTED_BRANDS.add(c.key));
   }
+  syncSessionsFromBrandSelection();
+  saveCompBrandSelection();
   buildPeriodButtons();
   await loadAllSelectedSessions();
 }
 
 async function deleteCompSession(sessionId) {
-  if(!confirm('Удалить этот период безвозвратно? Чтобы просто убрать с глаз — используй архив (📦).')) return;
+  if(!confirm('Удалить этот период безвозвратно? Чтобы просто убрать с глаз — используй архив (× на чипе).')) return;
   try {
     await fetch(`${RAILWAY_URL}/api/competitor-session/${sessionId}`, { method: 'DELETE' });
     COMP_SESSIONS = COMP_SESSIONS.filter(s => s.id !== sessionId);
     COMP_SELECTED_SESSIONS.delete(sessionId);
     if(COMP_ARCHIVED.delete(sessionId)) saveArchived();
     const active = COMP_SESSIONS.filter(s => !COMP_ARCHIVED.has(s.id));
-    if(active.length && !COMP_SELECTED_SESSIONS.size) COMP_SELECTED_SESSIONS.add(active[0].id);
+    ensureCompBrandSelection(active);
     buildPeriodButtons();
     if(COMP_SELECTED_SESSIONS.size) await loadAllSelectedSessions();
     else if(!COMP_SESSIONS.length) document.getElementById('compRoot').innerHTML = '<div class="empty" style="padding:40px 20px">Загрузи файл «Сравнение карточек» из WB Partners</div>';
@@ -4793,12 +5098,23 @@ async function deleteCompSession(sessionId) {
 async function loadAllSelectedSessions() {
   document.getElementById('compRoot').innerHTML = '<div class="loading"><div class="spinner"></div><span>Загружаем данные...</span></div>';
   try {
-    const allMetrics = []; const seenNm = new Set();
-    for(const sid of COMP_SELECTED_SESSIONS) {
-      const r = await fetch(`${RAILWAY_URL}/api/competitor-data/${sid}`);
+    const allMetrics = [];
+    const seenNm = new Set();
+    const sessions = COMP_SESSIONS
+      .filter(s => COMP_SELECTED_SESSIONS.has(s.id))
+      .sort((a, b) => (b.uploaded_at || '').localeCompare(a.uploaded_at || ''));
+    for(const s of sessions) {
+      const r = await fetch(`${RAILWAY_URL}/api/competitor-data/${s.id}`);
       const d = await r.json();
+      const periodKey = compPeriodKey(s);
       for(const m of (d.metrics || [])) {
-        if(!seenNm.has(m.nm_id)) { seenNm.add(m.nm_id); allMetrics.push(m); }
+        const brand = (m.brand || '').trim();
+        const selected = COMP_SELECTED_BRANDS.has(weekBrandKey(periodKey, brand))
+          || COMP_SELECTED_BRANDS.has(weekBrandKey(periodKey, ''));
+        if(!selected) continue;
+        if(seenNm.has(m.nm_id)) continue;
+        seenNm.add(m.nm_id);
+        allMetrics.push({...m, session_id: m.session_id || s.id});
       }
     }
     COMP_ALL_METRICS = allMetrics;
@@ -5056,8 +5372,16 @@ function renderCompetitorView() {
     };
   });
 
+  const selectedBrandNames = new Set(
+    [...COMP_SELECTED_BRANDS].map(k => parseWeekBrandKey(k).brand).filter(Boolean)
+  );
   const compMetrics = COMP_ALL_METRICS
     .filter(m => !COMP_OWN_ARTICLES.find(a => a.nm_id === m.nm_id))
+    .filter(m => {
+      if(!selectedBrandNames.size) return true;
+      const b = (m.brand || '').trim();
+      return b && selectedBrandNames.has(b);
+    })
     .map(m => ({...m, is_own: false}));  // «мой» только у явно добавленных через поиск
   const allMetrics = [...ownMetrics, ...compMetrics];
 
@@ -5344,7 +5668,14 @@ async function uploadCompetitorReport(file) {
       COMP_SELECTED_NMS = new Set();
       COMP_SESSIONS = await (await fetch(`${RAILWAY_URL}/api/competitor-sessions`)).json();
       if(COMP_ARCHIVED.delete(result.session_id)) saveArchived();  // свежий файл всегда активен
-      COMP_SELECTED_SESSIONS = new Set([result.session_id]);
+      const fresh = COMP_SESSIONS.find(s => s.id === result.session_id);
+      const active = COMP_SESSIONS.filter(s => !COMP_ARCHIVED.has(s.id));
+      // Включаем всех конкурентов этой недели, а не только только что загруженный файл.
+      if(fresh) {
+        const weekSessions = active.filter(s => compPeriodKey(s) === compPeriodKey(fresh));
+        weekChipItems(weekSessions).forEach(c => COMP_SELECTED_BRANDS.add(c.key));
+      }
+      ensureCompBrandSelection(active);
       buildPeriodButtons();
       await loadAllSelectedSessions();
     }
@@ -5975,12 +6306,107 @@ function refreshActiveShelf() {
   if(SHELF_ACTIVE) loadShelfFor(SHELF_ACTIVE, true);
 }
 
+function buildShelfCaptureScript(apiBase, nms, dest) {
+  const payload = JSON.stringify({ api: apiBase, nms, dest: Number(dest) || -1257786 });
+  return `(() => {
+const JOB = ${payload};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+(async () => {
+  try {
+    if (!location.hostname.includes('wildberries.ru')) {
+      alert('Открой страницу wildberries.ru и вставь скрипт снова');
+      return;
+    }
+    const nms = JOB.nms || [];
+    if (!nms.length) throw new Error('нет артикулов');
+    let ok = 0;
+    for (const nm of nms) {
+      const qs = new URLSearchParams({
+        appType: '1', curr: 'rub', dest: String(JOB.dest), spp: '30',
+        resultset: 'catalog', query: String(nm), nmId: String(nm),
+        page: '1', sort: 'popular', lang: 'ru', locale: 'ru'
+      });
+      const wuid = (document.cookie.match(/__wuid=([^;]+)/) || [])[1];
+      const r = await fetch('/__internal/u-recom/recom/ru/common/v9/search?' + qs, {
+        headers: {
+          'x-requested-with': 'XMLHttpRequest',
+          type: 'product',
+          'x-spa-version': (document.documentElement.getAttribute('data-spa-version') || '14.27.2'),
+          deviceid: wuid ? ('site_' + wuid) : ('site_' + Math.random().toString(16).slice(2))
+        }
+      });
+      const j = await r.json().catch(() => ({}));
+      const products = j.products || (j.data && j.data.products) || [];
+      const items = products.slice(0, 15).map((p, i) => ({
+        position: i + 1,
+        nm_id: p.id || p.nmId || p.nmID,
+        brand: p.brand || '',
+        name: p.name || '',
+        supplier: p.supplier || ''
+      })).filter(x => x.nm_id);
+      let competitor = { nm_id: nm, brand: '', name: '' };
+      try {
+        const cr = await fetch('/__internal/u-card/cards/v4/detail?' + new URLSearchParams({
+          appType: '1', curr: 'rub', dest: String(JOB.dest), spp: '30', nm: String(nm), lang: 'ru'
+        }), { headers: { 'x-requested-with': 'XMLHttpRequest', 'x-spa-version': (document.documentElement.getAttribute('data-spa-version') || '14.27.2'), deviceid: wuid ? ('site_' + wuid) : ('site_' + Math.random().toString(16).slice(2)) } });
+        const cj = await cr.json().catch(() => ({}));
+        const p = (cj.products || [])[0] || {};
+        competitor = { nm_id: nm, brand: p.brand || '', name: p.name || '', supplier: p.supplier || '' };
+      } catch (e) {}
+      if (!items.length) throw new Error('полка пустая http ' + r.status + ' для ' + nm);
+      const resp = await fetch(JOB.api + '/api/competitor-shelf/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nm_id: nm, dest: JOB.dest, items, competitor, total: products.length, limit: 15 })
+      });
+      const out = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(out.detail || out.error || ('HTTP ' + resp.status));
+      ok += 1;
+      console.log('[полка]', nm, items.length);
+      await sleep(400);
+    }
+    alert('Готово: ' + ok + ' полок. Вернись в дашборд → «Показать снимок»');
+  } catch (e) {
+    console.error(e);
+    alert('Ошибка съёма полки: ' + (e && e.message ? e.message : e));
+  }
+})();
+})();`;
+}
+
+async function copyShelfCaptureScript(kind) {
+  const isMine = kind === 'mine';
+  const nms = isMine
+    ? MY_SHELF_CARDS.map(c => Number(c.nm_id)).filter(Boolean)
+    : SHELF_COMPETITORS.map(c => Number(c.nm_id)).filter(Boolean);
+  const dest = isMine ? myShelfDest() : shelfDest();
+  const status = document.getElementById(isMine ? 'myShelfStatus' : 'shelfStatus');
+  const btn = document.getElementById(isMine ? 'myShelfCaptureBtn' : 'shelfCaptureBtn');
+  if (!nms.length) {
+    alert(isMine ? 'Сначала выбери свои карточки' : 'Сначала добавь конкурента');
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Копирую…'; }
+  try {
+    const apiBase = RAILWAY_URL || (location.origin || '');
+    await navigator.clipboard.writeText(buildShelfCaptureScript(apiBase, nms, dest));
+    const first = nms[0];
+    if (status) status.textContent = 'Скрипт в буфере · открой карточку WB → F12 → Console → Ctrl+V → Enter';
+    window.open('https://www.wildberries.ru/catalog/' + first + '/detail.aspx', '_blank');
+  } catch (e) {
+    if (status) status.textContent = 'Не удалось скопировать: ' + (e.message || e);
+    alert('Не удалось скопировать скрипт: ' + (e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '① Снять в Chrome'; }
+  }
+}
+
 async function fetchShelfData(nmId) {
   const dest = shelfDest();
   const r = await fetch(`${RAILWAY_URL}/api/competitor-shelf?nm_id=${nmId}&dest=${dest}&limit=15`);
   const d = await r.json().catch(() => ({}));
   if(!r.ok) throw new Error(d.detail || d.error || `HTTP ${r.status}`);
-  if(d.error && !(d.items||[]).length) throw new Error(d.error);
+  if(d.error && !(d.items||[]).length) throw new Error(d.hint || d.error);
   return d;
 }
 
@@ -6490,7 +6916,7 @@ async function fetchMyShelfData(nmId) {
   const r = await fetch(`${RAILWAY_URL}/api/competitor-shelf?nm_id=${nmId}&dest=${dest}&limit=15`);
   const d = await r.json().catch(() => ({}));
   if(!r.ok) throw new Error(d.detail || d.error || `HTTP ${r.status}`);
-  if(d.error && !(d.items||[]).length) throw new Error(d.error);
+  if(d.error && !(d.items||[]).length) throw new Error(d.hint || d.error);
   return d;
 }
 
@@ -7342,404 +7768,6 @@ async function saveCfoSnapshot() {
 
 restoreNavState();
 loadData();
-
-let VIS_DATA = null;
-let VIS_TPL = 'studio';
-let VIS_PHOTO = null;
-let VIS_READY = false;
-
-async function renderVisualPage() {
-  visDrawStudio();
-  if(VIS_READY) return;
-  try {
-    const r = await fetch(`${RAILWAY_URL}/api/search-keywords`);
-    const d = await r.json();
-    const keys = Array.isArray(d.keywords) ? d.keywords : [];
-    const dl = document.getElementById('visQueryList');
-    if(dl) dl.innerHTML = keys.map(k => `<option value="${escapeHtml(k.query || '')}">`).join('');
-    const cities = Array.isArray(d.cities) ? d.cities : [];
-    const sel = document.getElementById('visCity');
-    if(sel && cities.length) {
-      const saved = localStorage.getItem('pos_dest') || String(d.default_dest || -1257786);
-      sel.innerHTML = cities.map(c =>
-        `<option value="${c.dest}"${String(c.dest)===String(saved)?' selected':''}>${escapeHtml(c.name)}</option>`
-      ).join('');
-    }
-    VIS_READY = true;
-  } catch(e) {}
-}
-
-function visSetStatus(t, ok) {
-  const el = document.getElementById('visStatus');
-  if(!el) return;
-  el.textContent = t;
-  el.style.color = ok === false ? 'var(--red)' : (ok ? 'var(--green)' : 'var(--wb-muted)');
-}
-
-function visFmtPrice(n) {
-  if(n == null || !isFinite(n)) return '—';
-  return new Intl.NumberFormat('ru-RU').format(Math.round(n)) + ' ₽';
-}
-
-function visShotRu(s) {
-  return ({studio:'студия', busy:'плотный кадр', mixed:'смешанный'})[s] || s || '—';
-}
-
-async function runVisualSerp() {
-  const query = (document.getElementById('visQuery') || {}).value || '';
-  const dest = Number((document.getElementById('visCity') || {}).value || -1257786);
-  const btn = document.getElementById('visRunBtn');
-  if(!query.trim()) { visSetStatus('Введи поисковый запрос', false); return; }
-  if(btn) btn.disabled = true;
-  visSetStatus('Снимаю места 1–50 и собираю слайд, который должен кликаться лучше сетки… 15–25 сек');
-  try {
-    const r = await fetch(`${RAILWAY_URL}/api/visual/serp`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({query: query.trim(), dest, limit: 50, force: true}),
-    });
-    const d = await r.json();
-    if(!r.ok) throw new Error(d.detail || d.error || r.status);
-    VIS_DATA = d;
-    drawVisualResult();
-    const n = (d.items || []).length;
-    visSetStatus('Готово: ' + n + ' мест · слайд против этой выдачи собран', true);
-    const own = (document.getElementById('visOwnNm') || {}).value;
-    if(own && parseInt(own, 10)) visUseNmPhoto();
-  } catch(e) {
-    visSetStatus('Ошибка: ' + (e.message || e), false);
-  } finally {
-    if(btn) btn.disabled = false;
-  }
-}
-
-function visFmtPct(n) {
-  if(n == null || n === '' || !isFinite(Number(n))) return '—';
-  return (Math.round(Number(n) * 10) / 10) + '%';
-}
-
-function drawVisualResult() {
-  const d = VIS_DATA;
-  if(!d) return;
-  const brief = d.brief || {};
-  const funnel = d.funnel || {};
-  const items = d.items || [];
-  const matched = funnel.matched || brief.funnel_matched || 0;
-  const winner = brief.winner || (brief.concepts || [])[0] || null;
-
-  const winEl = document.getElementById('visWinner');
-  if(winEl) {
-    if(winner) {
-      const beats = (winner.why_beats || []).map(x => `<li>${escapeHtml(x)}</li>`).join('');
-      winEl.innerHTML = `<div class="vis-winner">
-        <h3>Слайд против мест 1–${winner.vs_places || items.length}: ${escapeHtml(winner.title || '')}</h3>
-        <div style="font-size:13px;margin-bottom:8px"><b>${escapeHtml(winner.headline || '')}</b> · ${escapeHtml(winner.sub || '')}</div>
-        <div style="font-size:12px;color:var(--wb-muted);margin-bottom:8px">${escapeHtml(winner.composition || '')}</div>
-        <ul>${beats}</ul>
-      </div>`;
-    } else winEl.innerHTML = '';
-  }
-
-  const stats = document.getElementById('visStats');
-  if(stats) stats.innerHTML = `<div class="vis-stats">
-    <div class="card"><div class="card-l">Совпало с отчётом</div><div class="card-v">${matched} / ${items.length || 0}</div>
-      <div class="card-sub">${escapeHtml(funnel.period || 'Сравнение карточек')}</div></div>
-    <div class="card"><div class="card-l">Медиана CTR</div><div class="card-v">${visFmtPct(brief.median_ctr)}</div>
-      <div class="card-sub">показы → карточка</div></div>
-    <div class="card"><div class="card-l">Медиана CR</div><div class="card-v">${visFmtPct(brief.median_cr)}</div>
-      <div class="card-sub">карточка → корзина</div></div>
-    <div class="card"><div class="card-l">Контрастный фон</div><div class="card-v" style="display:flex;align-items:center;gap:8px">
-      <span class="vis-swatch" style="width:22px;height:22px;background:${escapeHtml(brief.contrast_hex||'#ccc')}"></span>
-      <span style="font-size:16px">${escapeHtml(brief.contrast_hex || '')}</span></div>
-      <div class="card-sub">${escapeHtml(brief.dominant_bg_ru || '')} ${brief.dominant_bg_share || 0}% выдачи</div></div>
-  </div>`;
-
-  const holes = document.getElementById('visHoles');
-  if(holes) {
-    const list = (brief.holes || []).map(h => `<div class="vis-hole">${escapeHtml(h)}</div>`).join('');
-    const avoid = (brief.avoid || []).length
-      ? `<div class="vis-hole"><b>Не делать:</b> ${(brief.avoid || []).map(escapeHtml).join(' · ')}</div>` : '';
-    holes.innerHTML = `<div class="vis-holes">${list}${avoid}</div>`;
-  }
-
-  const concepts = document.getElementById('visConcepts');
-  if(concepts) {
-    concepts.innerHTML = `<div class="vis-concepts">${(brief.concepts || []).map(c => `
-      <button type="button" class="vis-concept${VIS_TPL===c.id?' on':''}" onclick="visApplyConcept('${c.id}')">
-        <h4><span class="vis-swatch" style="background:${escapeHtml(c.bg)}"></span>${escapeHtml(c.title)}</h4>
-        <p>${escapeHtml(c.why || '')}</p>
-        <div style="font-size:12px;font-weight:600">${escapeHtml(c.headline || '')}</div>
-        <div style="font-size:11px;color:var(--wb-muted);margin-top:4px">${escapeHtml(c.composition || '')}</div>
-      </button>`).join('')}</div>`;
-  }
-
-  const grid = document.getElementById('visGrid');
-  if(grid) {
-    const ranked = items.slice().sort((a,b) => (Number(b.ctr)||-1) - (Number(a.ctr)||-1));
-    const topNm = ranked[0] && ranked[0].ctr != null ? ranked[0].nm_id : null;
-    const cap = matched
-      ? `Сетка выдачи · бейдж = CTR из «Сравнение карточек» · рамка у лидера CTR`
-      : `Сетка выдачи · скор визуальный, в отчётах нет этих артикулов`;
-    grid.innerHTML = items.length
-      ? `<div style="font-size:13px;font-weight:600;margin:4px 0 10px">${cap}</div>
-         <div class="vis-grid">${items.map(it => {
-           const hasCtr = it.ctr != null && isFinite(Number(it.ctr));
-           const sc = hasCtr ? visFmtPct(it.ctr) : (it.click_score || 0);
-           const cls = hasCtr
-             ? (Number(it.ctr) >= (brief.median_ctr || 0) ? 'hi' : 'mid')
-             : ((it.click_score||0) >= 70 ? 'hi' : ((it.click_score||0) >= 50 ? 'mid' : ''));
-           const thumb = it.thumb || wbThumbUrl(it.nm_id);
-           const crLine = (it.cart_conv != null || it.order_conv != null)
-             ? `CR корз. ${visFmtPct(it.cart_conv)} · заказ ${visFmtPct(it.order_conv)}`
-             : `${visFmtPrice(it.price)} · ★ ${it.rating != null ? it.rating : '—'}`;
-           return `<a class="vis-card${it.nm_id===topNm?' top':''}" href="${escapeHtml(it.url||'#')}" target="_blank" rel="noopener">
-             <span class="vis-score ${cls}">${sc}</span>
-             <img src="${escapeHtml(thumb)}" alt="" loading="lazy"
-               onerror="if(!this.dataset.fb){this.dataset.fb=1;this.src='${wbThumbUrl(it.nm_id,'jpg')}'}">
-             <div class="vis-card-meta">
-               <div class="pos">#${it.position} · ${escapeHtml(visShotRu(it.shot))} · ${escapeHtml(it.bg_family||'')}</div>
-               <div class="nm">${escapeHtml(it.brand || it.name || String(it.nm_id))}</div>
-               <div class="pos">${crLine}</div>
-             </div>
-           </a>`;
-         }).join('')}</div>`
-      : `<div class="empty" style="padding:32px 16px">Нет карточек по этому ключу</div>`;
-  }
-
-  if(winner) visApplyConcept(winner.id, true);
-  else visDrawStudio();
-}
-
-function visApplyConcept(id, silent) {
-  const c = ((VIS_DATA && VIS_DATA.brief && VIS_DATA.brief.concepts) || []).find(x => x.id === id);
-  VIS_TPL = (id === 'wrist' || id === 'split') ? id : 'studio';
-  visSyncTplBtns();
-  if(c) {
-    const h = document.getElementById('visHeadline');
-    const s = document.getElementById('visSub');
-    const bg = document.getElementById('visBg');
-    const fg = document.getElementById('visFg');
-    const ac = document.getElementById('visAccent');
-    if(h) h.value = c.headline || '';
-    if(s) s.value = c.sub || '';
-    if(bg) bg.value = visNormHex(c.bg);
-    if(fg) fg.value = visNormHex(c.text);
-    if(ac) ac.value = visNormHex(c.accent || '#D4622A');
-  }
-  document.querySelectorAll('.vis-concept').forEach(el => {
-    el.classList.toggle('on', (el.getAttribute('onclick')||'').includes("'" + id + "'"));
-  });
-  visDrawStudio();
-  if(!silent) visSetStatus('Шаблон «' + (c && c.title ? c.title : id) + '» в студии', true);
-}
-
-function visNormHex(h) {
-  h = String(h || '#12141A').trim();
-  if(/^#[0-9a-fA-F]{6}$/.test(h)) return h;
-  return '#12141A';
-}
-
-function visSetTpl(id) {
-  VIS_TPL = id;
-  visSyncTplBtns();
-  visDrawStudio();
-}
-
-function visSyncTplBtns() {
-  [['visTplStudio','studio'],['visTplWrist','wrist'],['visTplSplit','split']].forEach(([id, t]) => {
-    const el = document.getElementById(id);
-    if(el) el.classList.toggle('on', VIS_TPL === t);
-  });
-}
-
-function visOnPhoto(file) {
-  if(!file) return;
-  const img = new Image();
-  img.onload = () => { VIS_PHOTO = img; visDrawStudio(); };
-  img.src = URL.createObjectURL(file);
-}
-
-function visUseNmPhoto() {
-  const nm = parseInt((document.getElementById('visOwnNm') || {}).value, 10);
-  if(!nm) { visSetStatus('Введи артикул WB своих часов', false); return; }
-  const img = new Image();
-  img.onload = () => { VIS_PHOTO = img; visDrawStudio(); visSetStatus('Фото карточки ' + nm + ' подставлено в слайд', true); };
-  img.onerror = () => visSetStatus('Не удалось загрузить фото ' + nm, false);
-  img.src = `${RAILWAY_URL}/api/visual/image/${nm}`;
-}
-
-function visRoundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x+r, y);
-  ctx.arcTo(x+w, y, x+w, y+h, r);
-  ctx.arcTo(x+w, y+h, x, y+h, r);
-  ctx.arcTo(x, y+h, x, y, r);
-  ctx.arcTo(x, y, x+w, y, r);
-  ctx.closePath();
-}
-
-function visCover(ctx, img, x, y, w, h) {
-  const ir = img.width / img.height;
-  const r = w / h;
-  let dw = w, dh = h, dx = x, dy = y;
-  if(ir > r) { dw = h * ir; dx = x - (dw - w) / 2; }
-  else { dh = w / ir; dy = y - (dh - h) / 2; }
-  ctx.drawImage(img, dx, dy, dw, dh);
-}
-
-function visContain(ctx, img, x, y, w, h, pad) {
-  pad = pad || 0;
-  const boxW = w - pad * 2, boxH = h - pad * 2;
-  const ir = img.width / img.height;
-  let dw, dh;
-  if(ir > boxW / boxH) { dw = boxW; dh = boxW / ir; }
-  else { dh = boxH; dw = boxH * ir; }
-  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
-}
-
-function visDrawStudio() {
-  const canvas = document.getElementById('visCanvas');
-  if(!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const W = 900, H = 1200;
-  canvas.width = W; canvas.height = H;
-  const bg = (document.getElementById('visBg') || {}).value || '#12141A';
-  const fg = (document.getElementById('visFg') || {}).value || '#F7F4F0';
-  const ac = (document.getElementById('visAccent') || {}).value || '#D4622A';
-  const headline = ((document.getElementById('visHeadline') || {}).value || '').trim();
-  const sub = ((document.getElementById('visSub') || {}).value || '').trim();
-
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
-
-  const drawPlaceholder = (x, y, w, h) => {
-    ctx.save();
-    ctx.strokeStyle = ac;
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(x + w/2, y + h*0.42, Math.min(w,h)*0.18, 0, Math.PI*2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.ellipse(x + w/2, y + h*0.62, Math.min(w,h)*0.16, 8, 0, 0, Math.PI*2);
-    ctx.stroke();
-    ctx.fillStyle = fg;
-    ctx.globalAlpha = 0.55;
-    ctx.font = '500 28px Inter, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Загрузи фото часов', x + w/2, y + h*0.78);
-    ctx.restore();
-  };
-
-  if(VIS_TPL === 'split') {
-    const splitY = Math.round(H * 0.62);
-    if(VIS_PHOTO) visCover(ctx, VIS_PHOTO, 0, 0, W, splitY);
-    else {
-      ctx.fillStyle = '#2A2622';
-      ctx.fillRect(0, 0, W, splitY);
-      drawPlaceholder(0, 0, W, splitY);
-    }
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, splitY, W, H - splitY);
-    ctx.fillStyle = ac;
-    ctx.fillRect(0, splitY, 10, H - splitY);
-    ctx.fillStyle = fg;
-    ctx.textAlign = 'left';
-    ctx.font = '700 52px Inter, sans-serif';
-    visWrapText(ctx, headline || 'УТП', 48, splitY + 90, W - 96, 60);
-    ctx.font = '500 32px Inter, sans-serif';
-    ctx.globalAlpha = 0.8;
-    visWrapText(ctx, sub, 48, splitY + 200, W - 96, 40);
-    ctx.globalAlpha = 1;
-  } else if(VIS_TPL === 'wrist') {
-    if(VIS_PHOTO) visCover(ctx, VIS_PHOTO, 0, 0, W, H);
-    else drawPlaceholder(0, 0, W, H);
-    const g = ctx.createLinearGradient(0, H*0.55, 0, H);
-    g.addColorStop(0, 'rgba(0,0,0,0)');
-    g.addColorStop(1, 'rgba(0,0,0,0.72)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'left';
-    ctx.font = '700 54px Inter, sans-serif';
-    visWrapText(ctx, headline || 'На руке', 48, H - 180, W - 96, 62);
-    ctx.font = '500 28px Inter, sans-serif';
-    ctx.globalAlpha = 0.9;
-    visWrapText(ctx, sub, 48, H - 90, W - 96, 36);
-    ctx.globalAlpha = 1;
-  } else {
-    if(VIS_PHOTO) visContain(ctx, VIS_PHOTO, 0, 40, W, H - 280, 70);
-    else drawPlaceholder(0, 40, W, H - 280);
-    ctx.fillStyle = ac;
-    visRoundRect(ctx, 0, 0, 12, H, 0);
-    ctx.fill();
-    ctx.fillStyle = fg;
-    ctx.textAlign = 'center';
-    ctx.font = '700 48px Inter, sans-serif';
-    visWrapText(ctx, headline || 'УТП', W/2, H - 150, W - 80, 56);
-    ctx.font = '500 28px Inter, sans-serif';
-    ctx.globalAlpha = 0.75;
-    visWrapText(ctx, sub, W/2, H - 72, W - 80, 36);
-    ctx.globalAlpha = 1;
-  }
-}
-
-function visWrapText(ctx, text, x, y, maxW, lineH) {
-  if(!text) return;
-  const words = String(text).split(/\s+/);
-  let line = '', yy = y;
-  for(let i=0;i<words.length;i++) {
-    const test = line ? line + ' ' + words[i] : words[i];
-    if(ctx.measureText(test).width > maxW && line) {
-      ctx.fillText(line, x, yy);
-      line = words[i];
-      yy += lineH;
-    } else line = test;
-  }
-  if(line) ctx.fillText(line, x, yy);
-}
-
-function visDownloadPng() {
-  visDrawStudio();
-  const canvas = document.getElementById('visCanvas');
-  if(!canvas) return;
-  const a = document.createElement('a');
-  const q = ((document.getElementById('visQuery') || {}).value || 'slide').replace(/[^\wа-яё-]+/gi, '-').slice(0,40);
-  a.download = 'wb-' + (q || 'slide') + '-900x1200.png';
-  a.href = canvas.toDataURL('image/png');
-  a.click();
-}
-
-function visCopyBrief() {
-  const d = VIS_DATA;
-  const b = (d && d.brief) || {};
-  const matched = (d && d.funnel && d.funnel.matched) || b.funnel_matched || 0;
-  const c = (b.concepts || []).find(x => x.id === VIS_TPL) || (b.concepts || [])[0] || {};
-  const lines = [
-    'Бриф главного слайда WB 900×1200',
-    'Запрос: ' + ((d && d.query) || (document.getElementById('visQuery')||{}).value || ''),
-    'Город: ' + ((d && d.city) || ''),
-    '',
-    'Что в выдаче:',
-    ...(b.holes || []).map(h => '— ' + h),
-    '',
-    'Не делать: ' + (b.avoid || []).join('; '),
-    '',
-    'Воронка из «Сравнение карточек»: совпало ' + (matched || 0) + ', медиана CTR ' + visFmtPct(b.median_ctr) + ', CR ' + visFmtPct(b.median_cr),
-    '',
-    'Побеждающий слайд: ' + ((b.winner && b.winner.title) || VIS_TPL),
-    ...((b.winner && b.winner.why_beats) || []).map(x => '— ' + x),
-    '',
-    'Концепт: ' + (c.title || VIS_TPL),
-    'Фон: ' + ((document.getElementById('visBg')||{}).value || c.bg || ''),
-    'Текст: ' + ((document.getElementById('visHeadline')||{}).value || ''),
-    'Подзаголовок: ' + ((document.getElementById('visSub')||{}).value || ''),
-    'Композиция: ' + (c.composition || ''),
-    '',
-    b.note || '',
-  ];
-  navigator.clipboard.writeText(lines.join('\n')).then(() => visSetStatus('Бриф скопирован', true))
-    .catch(() => visSetStatus('Не удалось скопировать', false));
-}
 </script>
 </body>
 </html>
